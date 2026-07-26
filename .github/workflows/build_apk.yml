@@ -27,6 +27,29 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Generate Missing Android Platform Files
+        run: flutter create --platforms=android .
+
+      - name: Enable Core Library Desugaring
+        run: |
+          if [ -f android/app/build.gradle.kts ]; then
+            FILE=android/app/build.gradle.kts
+            sed -i '/compileOptions {/a\        isCoreLibraryDesugaringEnabled = true' "$FILE"
+            echo '
+          dependencies {
+              coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+          }' >> "$FILE"
+          else
+            FILE=android/app/build.gradle
+            sed -i '/compileOptions {/a\        coreLibraryDesugaringEnabled true' "$FILE"
+            echo '
+          dependencies {
+              coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"
+          }' >> "$FILE"
+          fi
+          echo "----- Patched $FILE -----"
+          cat "$FILE"
+
       - name: Inject .env File from GitHub Secrets
         run: |
           echo "WEATHER_API_KEY=${{ secrets.WEATHER_API_KEY }}" > .env
@@ -34,6 +57,9 @@ jobs:
 
       - name: Install Dependencies
         run: flutter pub get
+
+      - name: Generate Native Splash Screen
+        run: flutter pub run flutter_native_splash:create
 
       - name: Build Release APK
         run: flutter build apk --release
