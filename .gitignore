@@ -1,0 +1,44 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+
+# IntelliJ project files
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Android Studio
+.navigation/
+captures/
+*.bak
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+flutter_*.png
+
+# Environment variables & secrets
+.env
+*.key
+*.keystore
+
+# Symbol files
+*.ipkg
+*.swo
+
+# Coverage
+coverage/
