@@ -52,13 +52,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
   }
 
-  @override,
+  @override
   void dispose() {
     _animController.dispose();
     super.dispose();
   }
 
-  @override,
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
@@ -106,6 +106,83 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                               ],
                             ),
                             child: ClipRRect(
+                              borderRadius: BorderRadius.circular(28),
+                              child: Image.asset(
+                                'assets/app_logo.png',
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Image.asset(
+                                    'assets/splash_icon.png',
+                                    fit: BoxFit.cover,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          const Text(
+                            'Atmosphere Weather',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Live Forecast & Severe Weather Radar',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 36),
+                          const SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: CircularProgressIndicator(
+                              color: Colors.lightBlueAccent,
+                              strokeWidth: 2.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              // Bottom Developer Branding Footer
+              Padding(
+                padding: const EdgeInsets.only(bottom: 24.0),
+                child: Column(
+                  children: [
+                    Container(
+                      height: 1,
+                      width: 60,
+                      color: Colors.white24,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Developed by Asif Qureshi',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
                               borderRadius: BorderRadius.circular(28),
                               child: Image.asset(
                                 'assets/app_logo.png',
