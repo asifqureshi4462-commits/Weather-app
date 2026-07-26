@@ -31,15 +31,15 @@ dev_dependencies:
 flutter_native_splash:
   color: "#0D0D0D"
   color_dark: "#0D0D0D"
-  image: assets/splash_icon.jpg
-  image_dark: assets/splash_icon.jpg
+  image: assets/splash_icon.png
+  image_dark: assets/splash_icon.png
   android_12:
-    image: assets/splash_icon.jpg
+    image: assets/splash_icon.png
     icon_background_color: "#0D0D0D"
 
 flutter:
   uses-material-design: true
   assets:
     - .env
-    - assets/splash_icon.jpg
-    - assets/app_logo.jpg
+    - assets/splash_icon.png
+    - assets/app_logo.png
