@@ -52,13 +52,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
   }
 
-  @override
+  @override,
   void dispose() {
     _animController.dispose();
     super.dispose();
   }
 
-  @override
+  @override,
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
@@ -167,7 +167,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     const Text(
                       'Developed by Asif Qureshi',
                       style: TextStyle(
-                        color: Colors.white70,
+                        color: Colors.white90,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.5,

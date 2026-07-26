@@ -47,13 +47,14 @@ import {
   Sunrise,
   Sunset,
   Moon,
-  ArrowUp
+  ArrowUp,
+  LayoutGrid
 } from 'lucide-react';
 
 // Code files dictionary mapping file path to content for easy download/preview
 const FLUTTER_FILES: Record<string, string> = {
   'pubspec.yaml': `name: atmosphere_weather
-description: "A feature-rich Flutter Weather application with AI Insights, AdMob monetization, offline caching, multi-language support, and GitHub Actions CI/CD for release APKs."
+description: "A feature-rich Flutter Weather application with AI Insights, Home Screen Widgets, AdMob monetization, offline caching, multi-language support, and GitHub Actions CI/CD for release APKs."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -77,6 +78,7 @@ dependencies:
   screenshot: ^3.0.0
   share_plus: ^10.0.0
   google_mobile_ads: ^5.1.0
+  home_widget: ^0.7.0
 
 dev_dependencies:
   flutter_test:
@@ -172,7 +174,7 @@ jobs:
           body: |
             ## Atmosphere Weather Android APK Release
             - Automated GitHub Actions build for run #\${{ github.run_number }}
-            - Features: AI Vibe Summaries, AdMob Monetization, Multi-Language (Urdu/Hindi/English), Offline Caching & Weather History Comparison
+            - Features: Home Screen Weather Widgets, AI Vibe Summaries, AdMob Monetization, Multi-Language, Offline Caching
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}`,
@@ -196,6 +198,18 @@ jobs:
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-3940256099942544~3347511713"/>
 
+        <!-- Home Screen AppWidget Receiver -->
+        <receiver
+            android:name=".WeatherWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/weather_widget_info" />
+        </receiver>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -211,6 +225,162 @@ jobs:
         </activity>
     </application>
 </manifest>`,
+
+  'lib/services/widget_service.dart': `import 'package:flutter/foundation.dart';
+import 'package:home_widget/home_widget.dart';
+import '../models/weather_model.dart';
+
+class WidgetService {
+  static const String _androidWidgetName = 'WeatherWidgetProvider';
+
+  static Future<void> updateHomeWidget(WeatherData weather, {bool isMetric = true}) async {
+    try {
+      final tempStr = isMetric ? '\${weather.current.tempC.round()}°C' : '\${weather.current.tempF.round()}°F';
+      final highLowStr = isMetric
+          ? 'H: \${weather.daily.isNotEmpty ? weather.daily.first.maxTempC.round() : 0}°  L: \${weather.daily.isNotEmpty ? weather.daily.first.minTempC.round() : 0}°'
+          : 'H: \${weather.daily.isNotEmpty ? weather.daily.first.maxTempF.round() : 0}°  L: \${weather.daily.isNotEmpty ? weather.daily.first.minTempF.round() : 0}°';
+
+      final now = DateTime.now();
+      final timeStr = '\${now.hour.toString().padLeft(2, '0')}:\${now.minute.toString().padLeft(2, '0')}';
+
+      await HomeWidget.saveWidgetData<String>('cityName', weather.location.name);
+      await HomeWidget.saveWidgetData<String>('temperature', tempStr);
+      await HomeWidget.saveWidgetData<String>('condition', weather.current.conditionText);
+      await HomeWidget.saveWidgetData<String>('highLow', highLowStr);
+      await HomeWidget.saveWidgetData<String>('updatedAt', 'Updated \$timeStr');
+
+      await HomeWidget.updateWidget(
+        name: _androidWidgetName,
+        androidName: _androidWidgetName,
+      );
+      debugPrint('Home Screen Widget updated with \${weather.location.name} (\$tempStr)');
+    } catch (e) {
+      debugPrint('Error updating home screen widget: \$e');
+    }
+  }
+}`,
+
+  'android/app/src/main/res/layout/weather_widget_layout.xml': `<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#1C2333"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_city"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="City"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_condition"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Sunny"
+                android:textColor="#A0AEC0"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_temp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="26°C"
+            android:textColor="#38BDF8"
+            android:textSize="26sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:background="#2D3748" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_high_low"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="H: 29°  L: 20°"
+            android:textColor="#CBD5E1"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/widget_updated_at"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Updated just now"
+            android:textColor="#64748B"
+            android:textSize="9sp" />
+    </LinearLayout>
+</LinearLayout>`,
+
+  'android/app/src/main/res/xml/weather_widget_info.xml': `<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/weather_widget_layout"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />`,
+
+  'android/app/src/main/java/com/example/atmosphere_weather/WeatherWidgetProvider.kt': `package com.example.atmosphere_weather
+
+import android.appwidget.AppWidgetManager
+import android.content.Context
+import android.content.SharedPreferences
+import android.widget.RemoteViews
+import es.antonborri.home_widget.HomeWidgetProvider
+
+class WeatherWidgetProvider : HomeWidgetProvider() {
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray,
+        widgetData: SharedPreferences
+    ) {
+        appWidgetIds.forEach { widgetId ->
+            val views = RemoteViews(context.packageName, R.layout.weather_widget_layout).apply {
+                val cityName = widgetData.getString("cityName", "City")
+                val temp = widgetData.getString("temperature", "--°")
+                val condition = widgetData.getString("condition", "Clear")
+                val highLow = widgetData.getString("highLow", "H:--° L:--°")
+                val updatedAt = widgetData.getString("updatedAt", "Tap to open")
+
+                setTextViewText(R.id.widget_city, cityName)
+                setTextViewText(R.id.widget_temp, temp)
+                setTextViewText(R.id.widget_condition, condition)
+                setTextViewText(R.id.widget_high_low, highLow)
+                setTextViewText(R.id.widget_updated_at, updatedAt)
+            }
+            appWidgetManager.updateAppWidget(widgetId, views)
+        }
+    }
+}`,
 
   'lib/main.dart': `import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1741,8 +1911,87 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
               </div>
             </div>
 
-            {/* Side Controls & Feature Breakdown */}
+            {/* Side Controls & Home Screen Widget Simulator */}
             <div className="lg:col-span-6 space-y-6">
+              {/* Home Screen Widget Live Preview Box */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                    <LayoutGrid className="w-4 h-4 text-cyan-400" />
+                    Android / iOS Home Screen Widget Preview
+                  </h2>
+                  <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-800/50">
+                    home_widget ^0.7.0
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Users can view live weather directly on their phone home screen without opening the app. Tap 'Force Widget Sync' to simulate background updates!
+                </p>
+
+                {/* Simulated Android Home Screen Widget (2x2 / 4x2 AppWidget) */}
+                <div className="bg-slate-950/90 border border-slate-700/80 rounded-2xl p-4 space-y-3 shadow-xl relative backdrop-blur">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-white flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+                        {currentWeather.name}
+                      </p>
+                      <p className="text-[11px] text-slate-400 font-medium">{currentWeather.condition}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-black text-cyan-400 tracking-tight">
+                        {isMetric ? `${currentWeather.tempC}°C` : `${currentWeather.tempF}°F`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="h-px bg-slate-800 w-full" />
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-300">
+                    <span className="font-semibold text-slate-200">
+                      H: {isMetric ? `${currentWeather.daily[0]?.highC ?? 29}°` : `${currentWeather.daily[0]?.highF ?? 84}°`} &nbsp;
+                      L: {isMetric ? `${currentWeather.daily[0]?.lowC ?? 20}°` : `${currentWeather.daily[0]?.lowF ?? 68}°`}
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-500">
+                      Updated just now
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-slate-400">Sync status:</span>
+                  <button
+                    onClick={() => {
+                      const toast = document.getElementById('widget-toast');
+                      if (toast) {
+                        toast.classList.remove('opacity-0', 'translate-y-2');
+                        toast.classList.add('opacity-100', 'translate-y-0');
+                        setTimeout(() => {
+                          toast.classList.remove('opacity-100', 'translate-y-0');
+                          toast.classList.add('opacity-0', 'translate-y-2');
+                        }, 2500);
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-sm active:scale-95"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Force Widget Sync
+                  </button>
+                </div>
+
+                {/* Widget Sync Toast Notification */}
+                <div
+                  id="widget-toast"
+                  className="opacity-0 translate-y-2 transition-all duration-300 pointer-events-none absolute bottom-3 left-5 right-5 bg-emerald-500 text-slate-950 px-3 py-2 rounded-xl font-bold text-xs flex items-center justify-between shadow-xl"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Check className="w-4 h-4" />
+                    Synced {currentWeather.name} ({isMetric ? `${currentWeather.tempC}°C` : `${currentWeather.tempF}°F`}) to AppWidget!
+                  </span>
+                  <span className="text-[10px] font-mono opacity-80">200 OK</span>
+                </div>
+              </div>
+
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-cyan-400" />
