@@ -31,7 +31,8 @@ import {
   FileCode,
   FolderTree,
   ExternalLink,
-  ChevronDown
+  ChevronDown,
+  AlertTriangle
 } from 'lucide-react';
 
 // Code files dictionary mapping file path to content for easy download/preview
@@ -718,14 +719,130 @@ const MOCK_WEATHER_DATABASE: Record<string, MockCityWeather> = {
       { day: 'Sat', condition: 'Sunny', highC: 25, lowC: 18, highF: 77, lowF: 64, rainChance: 0 },
     ],
   },
+  Miami: {
+    name: 'Miami',
+    country: 'United States',
+    lat: 25.7617,
+    lon: -80.1918,
+    tempC: 29,
+    tempF: 84,
+    feelsLikeC: 33,
+    feelsLikeF: 91,
+    condition: 'Severe Thunderstorm',
+    humidity: 88,
+    windKph: 35,
+    windMph: 22,
+    windDir: 'SSE',
+    uvIndex: 8.9,
+    aqiEpa: 3,
+    aqiPm25: 22.5,
+    pressureMb: 1005,
+    visibilityKm: 5,
+    isDay: true,
+    hourly: [
+      { time: 'Now', tempC: 29, tempF: 84, condition: 'Severe Thunderstorm', rainChance: 95 },
+      { time: '2 PM', tempC: 28, tempF: 82, condition: 'Thunderstorm', rainChance: 90 },
+      { time: '3 PM', tempC: 27, tempF: 80, condition: 'Heavy Rain', rainChance: 85 },
+      { time: '4 PM', tempC: 27, tempF: 80, condition: 'Light Rain', rainChance: 40 },
+    ],
+    daily: [
+      { day: 'Today', condition: 'Severe Thunderstorm', highC: 30, lowC: 24, highF: 86, lowF: 75, rainChance: 95 },
+      { day: 'Mon', condition: 'Heavy Rain', highC: 29, lowC: 24, highF: 84, lowF: 75, rainChance: 75 },
+      { day: 'Tue', condition: 'Sunny', highC: 31, lowC: 25, highF: 88, lowF: 77, rainChance: 10 },
+      { day: 'Wed', condition: 'Sunny', highC: 32, lowC: 25, highF: 90, lowF: 77, rainChance: 10 },
+      { day: 'Thu', condition: 'Partly Cloudy', highC: 30, lowC: 24, highF: 86, lowF: 75, rainChance: 20 },
+      { day: 'Fri', condition: 'Thunderstorm', highC: 29, lowC: 23, highF: 84, lowF: 73, rainChance: 80 },
+      { day: 'Sat', condition: 'Sunny', highC: 31, lowC: 25, highF: 88, lowF: 77, rainChance: 10 },
+    ],
+  },
+  Chicago: {
+    name: 'Chicago',
+    country: 'United States',
+    lat: 41.8781,
+    lon: -87.6298,
+    tempC: -2,
+    tempF: 28,
+    feelsLikeC: -8,
+    feelsLikeF: 17,
+    condition: 'Heavy Snow & Gale Warning',
+    humidity: 85,
+    windKph: 45,
+    windMph: 28,
+    windDir: 'NNW',
+    uvIndex: 1.0,
+    aqiEpa: 1,
+    aqiPm25: 7.0,
+    pressureMb: 998,
+    visibilityKm: 3,
+    isDay: true,
+    hourly: [
+      { time: 'Now', tempC: -2, tempF: 28, condition: 'Heavy Snow', rainChance: 90 },
+      { time: '2 PM', tempC: -1, tempF: 30, condition: 'Heavy Snow', rainChance: 85 },
+      { time: '3 PM', tempC: -3, tempF: 26, condition: 'Snow Squall', rainChance: 95 },
+      { time: '4 PM', tempC: -4, tempF: 24, condition: 'Light Snow', rainChance: 60 },
+    ],
+    daily: [
+      { day: 'Today', condition: 'Heavy Snow', highC: 0, lowC: -6, highF: 32, lowF: 21, rainChance: 90 },
+      { day: 'Mon', condition: 'Light Snow', highC: -1, lowC: -7, highF: 30, lowF: 19, rainChance: 50 },
+      { day: 'Tue', condition: 'Cloudy', highC: 1, lowC: -5, highF: 34, lowF: 23, rainChance: 20 },
+      { day: 'Wed', condition: 'Sunny', highC: 3, lowC: -3, highF: 37, lowF: 26, rainChance: 5 },
+      { day: 'Thu', condition: 'Partly Cloudy', highC: 4, lowC: -2, highF: 39, lowF: 28, rainChance: 10 },
+      { day: 'Fri', condition: 'Sunny', highC: 5, lowC: -1, highF: 41, lowF: 30, rainChance: 5 },
+      { day: 'Sat', condition: 'Partly Cloudy', highC: 6, lowC: 0, highF: 43, lowF: 32, rainChance: 10 },
+    ],
+  },
 };
+
+interface AlertBannerProps {
+  condition: string;
+  cityName: string;
+}
+
+const SEVERE_KEYWORDS = [
+  'thunderstorm',
+  'storm',
+  'heavy rain',
+  'extreme',
+  'snow',
+  'squall',
+  'tornado',
+  'hurricane',
+  'gale',
+  'warning',
+  'blizzard'
+];
+
+function AlertBanner({ condition, cityName }: AlertBannerProps) {
+  const isSevere = SEVERE_KEYWORDS.some((keyword) =>
+    condition.toLowerCase().includes(keyword)
+  );
+
+  if (!isSevere) return null;
+
+  return (
+    <div className="p-3.5 rounded-xl bg-gradient-to-r from-amber-500/25 via-red-500/30 to-amber-500/25 border border-amber-500/50 text-amber-200 flex items-start gap-3 shadow-lg animate-pulse">
+      <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+      <div className="flex-1 text-left">
+        <div className="flex items-center justify-between">
+          <span className="font-bold text-[11px] uppercase tracking-wider text-amber-300">Weather Alert</span>
+          <span className="text-[9px] font-bold bg-red-900/90 text-red-200 px-1.5 py-0.5 rounded border border-red-500/60 font-mono">
+            WARNING
+          </span>
+        </div>
+        <p className="text-[11px] mt-1 text-amber-100 font-medium leading-tight">
+          {condition} active in {cityName}. Stay alert for potential hazards and follow local guidance.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'preview' | 'code' | 'instructions'>('preview');
   const [selectedCity, setSelectedCity] = useState<string>('London');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isMetric, setIsMetric] = useState<boolean>(true);
-  const [favorites, setFavorites] = useState<string[]>(['London', 'New York', 'Tokyo']);
+  const [favorites, setFavorites] = useState<string[]>(['London', 'New York', 'Tokyo', 'Miami', 'Chicago']);
   const [activeFile, setActiveFile] = useState<string>('pubspec.yaml');
   const [copiedFile, setCopiedFile] = useState<boolean>(false);
   const [isZipping, setIsZipping] = useState<boolean>(false);
@@ -956,6 +1073,9 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
                         Feels like {isMetric ? `${currentWeather.feelsLikeC}°C` : `${currentWeather.feelsLikeF}°F`}
                       </p>
                     </div>
+
+                    {/* Conditional Severe Weather Alert Banner */}
+                    <AlertBanner condition={currentWeather.condition} cityName={currentWeather.name} />
 
                     {/* Hourly Forecast Horizontal Scroll */}
                     <div className="space-y-1.5">
