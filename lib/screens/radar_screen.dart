@@ -174,6 +174,7 @@ class _RadarScreenState extends State<RadarScreen> {
                   child: TileLayer(
                     urlTemplate: '$_host${_frames[_currentFrameIndex].path}/256/{z}/{x}/{y}/2/1_1.png',
                     tileProvider: NetworkTileProvider(),
+                    maxNativeZoom: 10,
                   ),
                 ),
 
