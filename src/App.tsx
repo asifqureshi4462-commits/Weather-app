@@ -46,7 +46,8 @@ import {
   AlertTriangle,
   Sunrise,
   Sunset,
-  Moon
+  Moon,
+  ArrowUp
 } from 'lucide-react';
 
 // Code files dictionary mapping file path to content for easy download/preview
@@ -595,6 +596,35 @@ class WeatherService {
     }
   }
 }`
+};
+
+const WIND_DIR_DEGREES: Record<string, number> = {
+  N: 0,
+  NNE: 22.5,
+  NE: 45,
+  ENE: 67.5,
+  E: 90,
+  ESE: 112.5,
+  SE: 135,
+  SSE: 157.5,
+  S: 180,
+  SSW: 202.5,
+  SW: 225,
+  WSW: 247.5,
+  W: 270,
+  WNW: 292.5,
+  NW: 315,
+  NNW: 337.5,
+};
+
+const getWindDegrees = (dirStr: string): number => {
+  if (!dirStr) return 0;
+  const upper = dirStr.trim().toUpperCase();
+  if (WIND_DIR_DEGREES[upper] !== undefined) {
+    return WIND_DIR_DEGREES[upper];
+  }
+  const parsed = parseFloat(dirStr);
+  return isNaN(parsed) ? 0 : parsed;
 };
 
 interface MockCityWeather {
@@ -1426,7 +1456,16 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
                         <span className="text-base font-bold my-1">
                           {isMetric ? `${currentWeather.windKph} km/h` : `${currentWeather.windMph} mph`}
                         </span>
-                        <span className="text-[9px] text-slate-400">Dir: {currentWeather.windDir}</span>
+                        <div className="flex items-center gap-1.5 text-[9px] text-slate-300 pt-0.5">
+                          <div className="w-4 h-4 rounded-full bg-cyan-950/80 border border-cyan-400/40 flex items-center justify-center shadow-inner">
+                            <ArrowUp
+                              className="w-2.5 h-2.5 text-cyan-400 transition-transform duration-500 ease-out"
+                              style={{ transform: `rotate(${getWindDegrees(currentWeather.windDir)}deg)` }}
+                            />
+                          </div>
+                          <span className="font-semibold text-cyan-200">{currentWeather.windDir}</span>
+                          <span className="text-[8px] text-slate-400 font-mono">({getWindDegrees(currentWeather.windDir)}°)</span>
+                        </div>
                       </div>
 
                       <div className="p-2.5 rounded-xl bg-black/20 border border-white/10 flex flex-col justify-between">
