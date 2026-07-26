@@ -149,9 +149,18 @@ jobs:
           echo "WEATHER_API_KEY=\${{ secrets.WEATHER_API_KEY }}" > .env
           echo "AI_API_KEY=\${{ secrets.AI_API_KEY }}" >> .env
           echo "ADMOB_APP_ID=\${{ secrets.ADMOB_APP_ID }}" >> .env
-          echo "ADMOB_BANNER_ID=\${{ secrets.ADMOB_BANNER_ID }}" >> .env
-          echo "ADMOB_INTERSTITIAL_ID=\${{ secrets.ADMOB_INTERSTITIAL_ID }}" >> .env
+          echo "ADMOB_BANNER_UNIT_ID=\${{ secrets.ADMOB_BANNER_UNIT_ID }}" >> .env
+          echo "ADMOB_INTERSTITIAL_UNIT_ID=\${{ secrets.ADMOB_INTERSTITIAL_UNIT_ID }}" >> .env
           echo "Created .env configuration with GitHub Secrets."
+
+      - name: Inject AdMob App ID into AndroidManifest.xml
+        run: |
+          ADMOB_ID="\${{ secrets.ADMOB_APP_ID }}"
+          if [ -z "\$ADMOB_ID" ]; then
+            ADMOB_ID="ca-app-pub-3940256099942544~3347511713"
+          fi
+          sed -i "s/ADMOB_APP_ID_PLACEHOLDER/\$ADMOB_ID/g" android/app/src/main/AndroidManifest.xml
+          echo "Successfully injected AdMob App ID into AndroidManifest.xml"
 
       - name: Install Dependencies
         run: flutter pub get
@@ -193,10 +202,10 @@ jobs:
         android:name="\${applicationName}"
         android:icon="@mipmap/ic_launcher">
         
-        <!-- Google AdMob Application ID Metadata -->
+        <!-- Google AdMob Application ID Metadata Placeholder (Replaced by GitHub Actions sed) -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713"/>
+            android:value="ADMOB_APP_ID_PLACEHOLDER"/>
 
         <!-- Home Screen AppWidget Receiver -->
         <receiver
@@ -909,6 +918,102 @@ Reply in 2 short Hinglish sentences.
 
   String _fallbackChatAnswer(String query, WeatherData weather) {
     return 'Current weather in \${weather.location.name}: \${weather.current.tempC}°C, \${weather.current.conditionText}. Rain chance: \${weather.daily.isNotEmpty ? weather.daily.first.chanceOfRain : 0}%.';
+  }
+}`,
+
+  'lib/services/ad_service.dart': `import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+
+class AdService {
+  static final AdService _instance = AdService._internal();
+  factory AdService() => _instance;
+  AdService._internal();
+
+  bool _isInitialized = false;
+  int _userActionCount = 0;
+  InterstitialAd? _interstitialAd;
+  bool _isInterstitialLoading = false;
+
+  // Official Google AdMob Test Unit IDs (Safe fallbacks if production secrets are missing)
+  static const String _testBannerId = 'ca-app-pub-3940256099942544/6300978111';
+  static const String _testInterstitialId = 'ca-app-pub-3940256099942544/1033173712';
+
+  String get bannerAdUnitId {
+    final envId = dotenv.env['ADMOB_BANNER_UNIT_ID'] ?? dotenv.env['ADMOB_BANNER_ID'];
+    if (envId != null && envId.isNotEmpty && !envId.contains('PLACEHOLDER')) {
+      return envId;
+    }
+    return _testBannerId;
+  }
+
+  String get interstitialAdUnitId {
+    final envId = dotenv.env['ADMOB_INTERSTITIAL_UNIT_ID'] ?? dotenv.env['ADMOB_INTERSTITIAL_ID'];
+    if (envId != null && envId.isNotEmpty && !envId.contains('PLACEHOLDER')) {
+      return envId;
+    }
+    return _testInterstitialId;
+  }
+
+  Future<void> init() async {
+    if (_isInitialized) return;
+    try {
+      await MobileAds.instance.initialize();
+      _isInitialized = true;
+      _loadInterstitialAd();
+    } catch (e) {
+      debugPrint('AdMob Init Exception: \$e');
+    }
+  }
+
+  void _loadInterstitialAd() {
+    if (_isInterstitialLoading || _interstitialAd != null) return;
+    _isInterstitialLoading = true;
+
+    InterstitialAd.load(
+      adUnitId: interstitialAdUnitId,
+      request: const AdRequest(),
+      adLoadCallback: InterstitialAdLoadCallback(
+        onAdLoaded: (ad) {
+          _interstitialAd = ad;
+          _isInterstitialLoading = false;
+          _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (ad) {
+              ad.dispose();
+              _interstitialAd = null;
+              _loadInterstitialAd(); // Preload next interstitial silently
+            },
+            onAdFailedToShowFullScreenContent: (ad, error) {
+              ad.dispose();
+              _interstitialAd = null;
+              _loadInterstitialAd();
+            },
+          );
+        },
+        onAdFailedToLoad: (error) {
+          debugPrint('Interstitial failed to load: \${error.message}');
+          _interstitialAd = null;
+          _isInterstitialLoading = false;
+        },
+      ),
+    );
+  }
+
+  /// Increments action counter. Displays interstitial every 3rd action (e.g. manual refresh or radar view).
+  void recordUserAction() {
+    _userActionCount++;
+    if (_userActionCount % 3 == 0) {
+      showInterstitialIfReady();
+    }
+  }
+
+  void showInterstitialIfReady() {
+    if (_interstitialAd != null) {
+      _interstitialAd!.show();
+      _interstitialAd = null;
+    } else {
+      _loadInterstitialAd();
+    }
   }
 }`
 };
