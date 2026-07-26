@@ -585,6 +585,8 @@ class WeatherService {
 interface MockCityWeather {
   name: string;
   country: string;
+  lat: number;
+  lon: number;
   tempC: number;
   tempF: number;
   feelsLikeC: number;
@@ -608,6 +610,8 @@ const MOCK_WEATHER_DATABASE: Record<string, MockCityWeather> = {
   London: {
     name: 'London',
     country: 'United Kingdom',
+    lat: 51.5074,
+    lon: -0.1278,
     tempC: 18,
     tempF: 64,
     feelsLikeC: 17,
@@ -644,6 +648,8 @@ const MOCK_WEATHER_DATABASE: Record<string, MockCityWeather> = {
   'New York': {
     name: 'New York',
     country: 'United States',
+    lat: 40.7128,
+    lon: -74.0060,
     tempC: 26,
     tempF: 79,
     feelsLikeC: 28,
@@ -679,6 +685,8 @@ const MOCK_WEATHER_DATABASE: Record<string, MockCityWeather> = {
   Tokyo: {
     name: 'Tokyo',
     country: 'Japan',
+    lat: 35.6762,
+    lon: 139.6503,
     tempC: 22,
     tempF: 72,
     feelsLikeC: 22,
@@ -923,7 +931,10 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
                   {/* Scrollable Mobile Body */}
                   <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-4 text-xs scrollbar-thin scrollbar-thumb-slate-700">
                     {/* Hero Current Weather Card */}
-                    <div className="p-5 rounded-2xl bg-black/30 backdrop-blur border border-white/15 flex flex-col items-center text-center shadow-lg">
+                    <div
+                      key={selectedCity}
+                      className="animate-card-entrance p-5 rounded-2xl bg-black/30 backdrop-blur border border-white/15 flex flex-col items-center text-center shadow-lg transition-all duration-300"
+                    >
                       <p className="text-base font-bold text-white">{currentWeather.name}</p>
                       <p className="text-[10px] text-cyan-200 mb-2">{currentWeather.country}</p>
 
@@ -1035,6 +1046,57 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
                         <span className="text-base font-bold my-1">AQI {currentWeather.aqiEpa}</span>
                         <span className="text-[9px] text-slate-400">PM2.5: {currentWeather.aqiPm25}</span>
                       </div>
+                    </div>
+
+                    {/* Static Map Location Preview Component */}
+                    <div className="p-3 rounded-xl bg-black/20 border border-white/10 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-slate-300">
+                          <MapPin className="w-3.5 h-3.5 text-red-400" />
+                          <span className="text-[10px] font-bold tracking-wider uppercase">Location Map</span>
+                        </div>
+                        <span className="text-[9px] font-mono text-cyan-300 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40">
+                          {currentWeather.lat > 0 ? `${currentWeather.lat.toFixed(4)}° N` : `${Math.abs(currentWeather.lat).toFixed(4)}° S`},{' '}
+                          {currentWeather.lon > 0 ? `${currentWeather.lon.toFixed(4)}° E` : `${Math.abs(currentWeather.lon).toFixed(4)}° W`}
+                        </span>
+                      </div>
+
+                      <a
+                        href={`https://www.openstreetmap.org/?mlat=${currentWeather.lat}&mlon=${currentWeather.lon}#map=12/${currentWeather.lat}/${currentWeather.lon}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group relative block overflow-hidden rounded-lg border border-white/10 bg-slate-800 hover:border-cyan-400/50 transition-all shadow-sm"
+                        title={`Open ${currentWeather.name} map on OpenStreetMap`}
+                      >
+                        {/* Map Tile Preview */}
+                        <div className="relative h-28 w-full bg-slate-950 overflow-hidden">
+                          <img
+                            src={`https://tile.openstreetmap.org/12/${Math.floor((currentWeather.lon + 180) / 360 * 4096)}/${Math.floor((1 - Math.log(Math.tan(currentWeather.lat * Math.PI / 180) + 1 / Math.cos(currentWeather.lat * Math.PI / 180)) / Math.PI) / 2 * 4096)}.png`}
+                            alt={`Map view of ${currentWeather.name}`}
+                            className="w-full h-full object-cover opacity-80 group-hover:scale-105 group-hover:opacity-100 transition-all duration-300 filter contrast-125"
+                            onError={(e) => {
+                              e.currentTarget.src = 'https://images.unsplash.com/photo-1524661135-423995f22d0b?w=400&auto=format&fit=crop&q=80';
+                            }}
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
+
+                          {/* Map Pin Marker */}
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="relative flex items-center justify-center">
+                              <div className="w-7 h-7 rounded-full bg-red-500/30 animate-ping absolute" />
+                              <div className="w-8 h-8 rounded-full bg-red-500/20 border border-red-400 flex items-center justify-center shadow-lg relative z-10 backdrop-blur-xs">
+                                <MapPin className="w-4 h-4 text-red-400 fill-red-500" />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* External Link Badge */}
+                          <div className="absolute bottom-2 right-2 px-2 py-1 rounded bg-black/70 backdrop-blur border border-white/20 text-[10px] text-slate-200 flex items-center gap-1 group-hover:bg-cyan-500 group-hover:text-slate-950 group-hover:font-bold transition-all">
+                            <span>Open in Map</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </div>
+                        </div>
+                      </a>
                     </div>
 
                     {/* Developer Branding Footer */}
