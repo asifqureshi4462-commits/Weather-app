@@ -224,9 +224,67 @@ class AtmosphereApp extends StatelessWidget {
             colorSchemeSeed: Colors.deepPurple,
             brightness: Brightness.dark,
           ),
-          home: const HomeScreen(),
+          home: const SplashScreen(),
         );
       },
+    );
+  }
+}`,
+
+  'lib/screens/splash_screen.dart': `import 'package:flutter/material.dart';
+import 'home_screen.dart';
+
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(milliseconds: 2200), () {
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const SizedBox(height: 40),
+              Column(
+                children: [
+                  Image.asset('assets/app_logo.png', width: 140, height: 140),
+                  const SizedBox(height: 24),
+                  const Text('Atmosphere Weather', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const SizedBox(height: 8),
+                  const Text('Live Forecast & Severe Weather Radar', style: TextStyle(color: Colors.white70)),
+                ],
+              ),
+              const Padding(
+                padding: EdgeInsets.bottom(24.0),
+                child: Text('Developed by Asif Qureshi', style: TextStyle(color: Colors.white90, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }`,
@@ -802,7 +860,9 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
                   {/* Flutter AppBar */}
                   <div className="px-4 py-2 flex items-center justify-between z-20">
                     <div className="flex items-center gap-2">
-                      <MapPin className="w-5 h-5 text-cyan-300 animate-pulse" />
+                      <div className="w-7 h-7 rounded-lg overflow-hidden border border-white/20 shadow-sm flex-shrink-0">
+                        <img src="assets/app_logo.png" alt="Logo" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = 'assets/splash_icon.png'; }} />
+                      </div>
                       <span className="font-bold text-lg tracking-tight">Atmosphere</span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -975,6 +1035,13 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
                         <span className="text-base font-bold my-1">AQI {currentWeather.aqiEpa}</span>
                         <span className="text-[9px] text-slate-400">PM2.5: {currentWeather.aqiPm25}</span>
                       </div>
+                    </div>
+
+                    {/* Developer Branding Footer */}
+                    <div className="pt-3 pb-2 text-center border-t border-white/10">
+                      <p className="text-[11px] font-semibold text-cyan-200 tracking-wide">
+                        Developed by Asif Qureshi
+                      </p>
                     </div>
                   </div>
                 </div>

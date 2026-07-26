@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'providers/weather_provider.dart';
-import 'screens/home_screen.dart';
+import 'screens/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -75,7 +75,7 @@ class AtmosphereApp extends StatelessWidget {
               centerTitle: false,
             ),
           ),
-          home: const HomeScreen(),
+          home: const SplashScreen(),
         );
       },
     );

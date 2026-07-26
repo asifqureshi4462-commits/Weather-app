@@ -45,6 +45,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 });
               },
             ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                'assets/app_logo.png',
+                width: 28,
+                height: 28,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const Icon(Icons.wb_sunny_rounded, color: Colors.amberAccent),
+              ),
+            ),
+            const SizedBox(width: 8),
             const Text(
               'Atmosphere',
               style: TextStyle(
