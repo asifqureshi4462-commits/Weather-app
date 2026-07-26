@@ -241,17 +241,74 @@ class DailyForecast {
   }
 }
 
+class WeatherAlert {
+  final String id;
+  final String headline;
+  final String msgType;
+  final String severity;
+  final String urgency;
+  final String areas;
+  final String category;
+  final String event;
+  final String note;
+  final String effective;
+  final String expires;
+  final String desc;
+  final String instruction;
+
+  WeatherAlert({
+    required this.id,
+    required this.headline,
+    required this.msgType,
+    required this.severity,
+    required this.urgency,
+    required this.areas,
+    required this.category,
+    required this.event,
+    required this.note,
+    required this.effective,
+    required this.expires,
+    required this.desc,
+    required this.instruction,
+  });
+
+  factory WeatherAlert.fromJson(Map<String, dynamic> json) {
+    final eventStr = json['event']?.toString() ?? 'Weather Alert';
+    final effStr = json['effective']?.toString() ?? '';
+    final expStr = json['expires']?.toString() ?? '';
+    final headlineStr = json['headline']?.toString() ?? 'Severe Weather Warning';
+
+    return WeatherAlert(
+      id: '${eventStr}_${effStr}_$expStr',
+      headline: headlineStr,
+      msgType: json['msgtype']?.toString() ?? 'Alert',
+      severity: json['severity']?.toString() ?? 'Moderate',
+      urgency: json['urgency']?.toString() ?? 'Expected',
+      areas: json['areas']?.toString() ?? 'Local Region',
+      category: json['category']?.toString() ?? 'Met',
+      event: eventStr,
+      note: json['note']?.toString() ?? '',
+      effective: effStr,
+      expires: expStr,
+      desc: json['desc']?.toString() ?? 'No detailed description provided by weather authority.',
+      instruction: json['instruction']?.toString() ?? 'Take precautions and follow local weather updates.',
+    );
+  }
+}
+
 class WeatherData {
   final LocationData location;
   final CurrentWeather current;
   final List<HourlyForecast> hourly;
   final List<DailyForecast> daily;
+  final List<WeatherAlert> alerts;
 
   WeatherData({
     required this.location,
     required this.current,
     required this.hourly,
     required this.daily,
+    required this.alerts,
   });
 
   factory WeatherData.fromJson(Map<String, dynamic> json) {
@@ -260,6 +317,7 @@ class WeatherData {
 
     List<HourlyForecast> hourlyList = [];
     List<DailyForecast> dailyList = [];
+    List<WeatherAlert> alertsList = [];
 
     final forecastObj = json['forecast'] as Map<String, dynamic>?;
     final forecastDays = forecastObj?['forecastday'] as List<dynamic>?;
@@ -281,11 +339,22 @@ class WeatherData {
       }
     }
 
+    final alertsObj = json['alerts'] as Map<String, dynamic>?;
+    final alertArray = alertsObj?['alert'] as List<dynamic>?;
+    if (alertArray != null) {
+      for (var alertJson in alertArray) {
+        if (alertJson is Map<String, dynamic>) {
+          alertsList.add(WeatherAlert.fromJson(alertJson));
+        }
+      }
+    }
+
     return WeatherData(
       location: location,
       current: current,
       hourly: hourlyList,
       daily: dailyList,
+      alerts: alertsList,
     );
   }
 }

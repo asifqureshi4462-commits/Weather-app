@@ -70,6 +70,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 24),
           const Text(
+            'NOTIFICATIONS',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.notifications_active_rounded),
+                  title: const Text('Daily Morning Weather Summary'),
+                  subtitle: const Text('Scheduled daily forecast summary for active city'),
+                  value: provider.dailyNotifEnabled,
+                  onChanged: (val) => provider.setDailyNotifEnabled(val),
+                ),
+                if (provider.dailyNotifEnabled) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.access_time_rounded),
+                    title: const Text('Summary Time'),
+                    subtitle: Text(
+                      TimeOfDay(
+                        hour: provider.dailyNotifHour,
+                        minute: provider.dailyNotifMinute,
+                      ).format(context),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay(
+                          hour: provider.dailyNotifHour,
+                          minute: provider.dailyNotifMinute,
+                        ),
+                      );
+                      if (picked != null) {
+                        await provider.setDailyNotifTime(picked.hour, picked.minute);
+                      }
+                    },
+                  ),
+                ],
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.notification_add_rounded),
+                  title: const Text('Test Immediate Alert'),
+                  subtitle: const Text('Trigger a test notification now'),
+                  trailing: const Icon(Icons.send_rounded),
+                  onTap: () async {
+                    await provider.syncDailyNotification();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Triggered test notification! Check your notification shade.'),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
             'APPEARANCE & THEME',
             style: TextStyle(
               fontSize: 12,

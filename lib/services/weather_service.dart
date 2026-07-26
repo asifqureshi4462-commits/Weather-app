@@ -21,7 +21,7 @@ class WeatherService {
       throw Exception('API Key is missing. Please configure WEATHER_API_KEY in your .env or GitHub Secrets.');
     }
 
-    final url = Uri.parse('$_baseUrl/forecast.json?key=$key&q=$query&days=7&aqi=yes&alerts=no');
+    final url = Uri.parse('$_baseUrl/forecast.json?key=$key&q=$query&days=7&aqi=yes&alerts=yes');
 
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 12));

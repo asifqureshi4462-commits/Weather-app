@@ -34,6 +34,14 @@ class WeatherProvider with ChangeNotifier {
   bool get isMetric => _unitSystem == 'metric';
   String get themeMode => _themeMode;
 
+  bool _dailyNotifEnabled = true;
+  int _dailyNotifHour = 8;
+  int _dailyNotifMinute = 0;
+
+  bool get dailyNotifEnabled => _dailyNotifEnabled;
+  int get dailyNotifHour => _dailyNotifHour;
+  int get dailyNotifMinute => _dailyNotifMinute;
+
   WeatherProvider() {
     init();
   }
@@ -44,9 +52,15 @@ class WeatherProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      await _notificationService.init();
+
       _unitSystem = await _storageService.getUnitSystem();
       _themeMode = await _storageService.getThemeMode();
       _favoriteCities = await _storageService.getFavoriteCities();
+
+      _dailyNotifEnabled = await _storageService.getDailyNotifEnabled();
+      _dailyNotifHour = await _storageService.getDailyNotifHour();
+      _dailyNotifMinute = await _storageService.getDailyNotifMinute();
 
       // Try GPS location first, fallback to first favorite city or London
       try {
@@ -84,23 +98,83 @@ class WeatherProvider with ChangeNotifier {
         _activeCityIndex = existingIdx;
       }
 
-      // Trigger daily notification update silently
-      _notificationService.showDailyWeatherNotification(
-        cityName: data.location.name,
-        condition: data.current.conditionText,
-        tempText: isMetric ? '${data.current.tempC.round()}°C' : '${data.current.tempF.round()}°F',
-      );
-      _notificationService.scheduleDailyMorningNotification(
-        cityName: data.location.name,
-        condition: data.current.conditionText,
-        tempText: isMetric ? '${data.current.tempC.round()}°C' : '${data.current.tempF.round()}°F',
-      );
+      await _processSevereAlerts(data);
+      await syncDailyNotification();
     } catch (e) {
       _errorMessage = e.toString().replaceAll('Exception: ', '');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<void> _processSevereAlerts(WeatherData data) async {
+    if (data.alerts.isEmpty) return;
+
+    try {
+      final processedIds = await _storageService.getProcessedAlertIds();
+      List<String> updatedIds = List.from(processedIds);
+
+      for (var alert in data.alerts) {
+        if (!processedIds.contains(alert.id)) {
+          updatedIds.add(alert.id);
+          await _notificationService.showImmediateNotification(
+            title: '⚠️ Weather Alert: ${alert.event}',
+            body: alert.headline,
+          );
+        }
+      }
+
+      if (updatedIds.length != processedIds.length) {
+        await _storageService.saveProcessedAlertIds(updatedIds);
+      }
+    } catch (e) {
+      debugPrint('Error processing weather alerts: $e');
+    }
+  }
+
+  Future<void> syncDailyNotification() async {
+    if (!_dailyNotifEnabled || _currentWeather == null) {
+      await _notificationService.cancelDailySummary();
+      return;
+    }
+
+    final weather = _currentWeather!;
+    final tempText = isMetric
+        ? '${weather.current.tempC.round()}°C'
+        : '${weather.current.tempF.round()}°F';
+
+    final rainChance = weather.hourly.isNotEmpty
+        ? weather.hourly.first.chanceOfRain
+        : (weather.daily.isNotEmpty ? weather.daily.first.chanceOfRain : 0);
+
+    final rainChanceText = rainChance > 0
+        ? '$rainChance% rain chance'
+        : 'Low rain chance';
+
+    await _notificationService.scheduleDailyMorningSummary(
+      hour: _dailyNotifHour,
+      minute: _dailyNotifMinute,
+      cityName: weather.location.name,
+      condition: weather.current.conditionText,
+      tempText: tempText,
+      rainChanceText: rainChanceText,
+    );
+  }
+
+  Future<void> setDailyNotifEnabled(bool enabled) async {
+    _dailyNotifEnabled = enabled;
+    await _storageService.setDailyNotifEnabled(enabled);
+    await syncDailyNotification();
+    notifyListeners();
+  }
+
+  Future<void> setDailyNotifTime(int hour, int minute) async {
+    _dailyNotifHour = hour;
+    _dailyNotifMinute = minute;
+    await _storageService.setDailyNotifTime(hour, minute);
+    await syncDailyNotification();
+    notifyListeners();
   }
 
   Future<void> loadWeatherByLocation() async {
