@@ -53,7 +53,7 @@ import {
 // Code files dictionary mapping file path to content for easy download/preview
 const FLUTTER_FILES: Record<string, string> = {
   'pubspec.yaml': `name: atmosphere_weather
-description: "A feature-rich Flutter Weather application with GitHub Actions CI/CD pipeline for automated APK builds."
+description: "A feature-rich Flutter Weather application with AI Insights, AdMob monetization, offline caching, multi-language support, and GitHub Actions CI/CD for release APKs."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -71,6 +71,12 @@ dependencies:
   flutter_dotenv: ^5.1.0
   intl: ^0.19.0
   flutter_local_notifications: ^17.1.2
+  fl_chart: ^0.68.0
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  screenshot: ^3.0.0
+  share_plus: ^10.0.0
+  google_mobile_ads: ^5.1.0
 
 dev_dependencies:
   flutter_test:
@@ -82,7 +88,11 @@ flutter:
   assets:
     - .env`,
 
-  '.env.example': `WEATHER_API_KEY=your_weatherapi_key_here`,
+  '.env.example': `WEATHER_API_KEY=your_weatherapi_key_here
+AI_API_KEY=your_anthropic_claude_or_openai_api_key_here
+ADMOB_APP_ID=ca-app-pub-3940256099942544~3347511713
+ADMOB_BANNER_ID=ca-app-pub-3940256099942544/6300978111
+ADMOB_INTERSTITIAL_ID=ca-app-pub-3940256099942544/1033173712`,
 
   '.gitignore': `# Miscellaneous
 *.class
@@ -135,7 +145,11 @@ jobs:
       - name: Inject .env File from GitHub Secrets
         run: |
           echo "WEATHER_API_KEY=\${{ secrets.WEATHER_API_KEY }}" > .env
-          echo "Created .env configuration file."
+          echo "AI_API_KEY=\${{ secrets.AI_API_KEY }}" >> .env
+          echo "ADMOB_APP_ID=\${{ secrets.ADMOB_APP_ID }}" >> .env
+          echo "ADMOB_BANNER_ID=\${{ secrets.ADMOB_BANNER_ID }}" >> .env
+          echo "ADMOB_INTERSTITIAL_ID=\${{ secrets.ADMOB_INTERSTITIAL_ID }}" >> .env
+          echo "Created .env configuration with GitHub Secrets."
 
       - name: Install Dependencies
         run: flutter pub get
@@ -158,7 +172,7 @@ jobs:
           body: |
             ## Atmosphere Weather Android APK Release
             - Automated GitHub Actions build for run #\${{ github.run_number }}
-            - Built with Flutter Stable SDK & Java 17
+            - Features: AI Vibe Summaries, AdMob Monetization, Multi-Language (Urdu/Hindi/English), Offline Caching & Weather History Comparison
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}`,
@@ -170,11 +184,18 @@ jobs:
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:label="Atmosphere Weather"
         android:name="\${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        
+        <!-- Google AdMob Application ID Metadata -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713"/>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -194,9 +215,10 @@ jobs:
   'lib/main.dart': `import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
 import 'providers/weather_provider.dart';
-import 'screens/home_screen.dart';
+import 'screens/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -212,9 +234,15 @@ Future<void> main() async {
     await dotenv.load(fileName: ".env");
   } catch (_) {}
 
+  try {
+    await MobileAds.instance.initialize();
+  } catch (e) {
+    debugPrint('AdMob initialization error: \$e');
+  }
+
   runApp(
     ChangeNotifierProvider(
-      create: (_) => WeatherProvider(),
+      create: (_) => WeatherProvider()..initializeSettingsAndLoad(),
       child: const AtmosphereApp(),
     ),
   );
@@ -290,7 +318,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   const SizedBox(height: 24),
                   const Text('Atmosphere Weather', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white)),
                   const SizedBox(height: 8),
-                  const Text('Live Forecast & Severe Weather Radar', style: TextStyle(color: Colors.white70)),
+                  const Text('AI Vibe, Multi-Language & Live Forecast', style: TextStyle(color: Colors.white70)),
                 ],
               ),
               const Padding(
@@ -413,42 +441,6 @@ class CurrentWeather {
   }
 }
 
-class HourlyForecast {
-  final String time;
-  final double tempC;
-  final double tempF;
-  final String conditionText;
-  final String conditionIcon;
-  final int chanceOfRain;
-  final double rainMm;
-  final bool isDay;
-
-  HourlyForecast({
-    required this.time,
-    required this.tempC,
-    required this.tempF,
-    required this.conditionText,
-    required this.conditionIcon,
-    required this.chanceOfRain,
-    required this.rainMm,
-    required this.isDay,
-  });
-
-  factory HourlyForecast.fromJson(Map<String, dynamic> json) {
-    final cond = json['condition'] as Map<String, dynamic>?;
-    return HourlyForecast(
-      time: json['time']?.toString() ?? '',
-      tempC: (json['temp_c'] as num?)?.toDouble() ?? 0.0,
-      tempF: (json['temp_f'] as num?)?.toDouble() ?? 32.0,
-      conditionText: cond?['text']?.toString() ?? 'Clear',
-      conditionIcon: cond?['icon']?.toString() ?? '',
-      chanceOfRain: (json['chance_of_rain'] as num?)?.toInt() ?? 0,
-      rainMm: (json['precip_mm'] as num?)?.toDouble() ?? 0.0,
-      isDay: ((json['is_day'] as num?)?.toInt() ?? 1) == 1,
-    );
-  }
-}
-
 class DailyForecast {
   final String date;
   final double maxTempC;
@@ -466,6 +458,7 @@ class DailyForecast {
   final double uvIndex;
   final String sunrise;
   final String sunset;
+  final bool isBestDay;
 
   DailyForecast({
     required this.date,
@@ -484,6 +477,7 @@ class DailyForecast {
     required this.uvIndex,
     required this.sunrise,
     required this.sunset,
+    this.isBestDay = false,
   });
 
   factory DailyForecast.fromJson(Map<String, dynamic> json) {
@@ -508,6 +502,7 @@ class DailyForecast {
       uvIndex: (day?['uv'] as num?)?.toDouble() ?? 0.0,
       sunrise: astro?['sunrise']?.toString() ?? '06:00 AM',
       sunset: astro?['sunset']?.toString() ?? '06:30 PM',
+      isBestDay: false,
     );
   }
 }
@@ -515,21 +510,17 @@ class DailyForecast {
 class WeatherData {
   final LocationData location;
   final CurrentWeather current;
-  final List<HourlyForecast> hourly;
   final List<DailyForecast> daily;
 
   WeatherData({
     required this.location,
     required this.current,
-    required this.hourly,
     required this.daily,
   });
 
   factory WeatherData.fromJson(Map<String, dynamic> json) {
     final location = LocationData.fromJson(json['location'] as Map<String, dynamic>?);
     final current = CurrentWeather.fromJson(json['current'] as Map<String, dynamic>?);
-
-    List<HourlyForecast> hourlyList = [];
     List<DailyForecast> dailyList = [];
 
     final forecastObj = json['forecast'] as Map<String, dynamic>?;
@@ -539,22 +530,46 @@ class WeatherData {
       for (var dayJson in forecastDays) {
         if (dayJson is Map<String, dynamic>) {
           dailyList.add(DailyForecast.fromJson(dayJson));
-          final hourArray = dayJson['hour'] as List<dynamic>?;
-          if (hourArray != null) {
-            for (var hourJson in hourArray) {
-              if (hourJson is Map<String, dynamic>) {
-                hourlyList.add(HourlyForecast.fromJson(hourJson));
-              }
-            }
-          }
         }
       }
+    }
+
+    // Calculate Best Day of the Week
+    if (dailyList.isNotEmpty) {
+      int bestIdx = 0;
+      double bestScore = -999;
+
+      for (int i = 0; i < dailyList.length; i++) {
+        final d = dailyList[i];
+        // Score based on low rain chance, comfortable temp (~22C), and low wind
+        double tempPenalty = (d.avgTempC - 23.0).abs();
+        double score = 100 - (d.chanceOfRain * 1.2) - (tempPenalty * 2.0) - (d.maxWindKph * 0.5);
+        if (score > bestScore) {
+          bestScore = score;
+          bestIdx = i;
+        }
+      }
+
+      dailyList = dailyList.asMap().entries.map((entry) {
+        final idx = entry.key;
+        final d = entry.value;
+        if (idx == bestIdx) {
+          return DailyForecast(
+            date: d.date, maxTempC: d.maxTempC, maxTempF: d.maxTempF,
+            minTempC: d.minTempC, minTempF: d.minTempF, avgTempC: d.avgTempC,
+            avgTempF: d.avgTempF, conditionText: d.conditionText, conditionIcon: d.conditionIcon,
+            chanceOfRain: d.chanceOfRain, totalRainMm: d.totalRainMm, maxWindKph: d.maxWindKph,
+            avgHumidity: d.avgHumidity, uvIndex: d.uvIndex, sunrise: d.sunrise, sunset: d.sunset,
+            isBestDay: true,
+          );
+        }
+        return d;
+      }).toList();
     }
 
     return WeatherData(
       location: location,
       current: current,
-      hourly: hourlyList,
       daily: dailyList,
     );
   }
@@ -594,6 +609,136 @@ class WeatherService {
     } catch (e) {
       throw Exception('Error loading weather: \$e');
     }
+  }
+}`,
+
+  'lib/services/ai_insight_service.dart': `import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../models/weather_model.dart';
+
+class AiInsightService {
+  String get _aiApiKey => dotenv.env['AI_API_KEY'] ?? '';
+
+  Future<String> generateDailyVibe(WeatherData weather, String language) async {
+    final apiKey = _aiApiKey;
+    if (apiKey.isEmpty) {
+      return _fallbackDailyVibe(weather, language);
+    }
+
+    final prompt = '''
+Summarize today's weather for \${weather.location.name} in 1 short, catchy Hinglish sentence:
+Temp: \${weather.current.tempC}°C, Condition: \${weather.current.conditionText}, Rain chance: \${weather.daily.isNotEmpty ? weather.daily.first.chanceOfRain : 0}%.
+Keep under 18 words.
+''';
+
+    try {
+      final responseText = await _callAiApi(prompt, apiKey);
+      if (responseText != null && responseText.trim().isNotEmpty) {
+        return responseText.trim();
+      }
+    } catch (e) {
+      debugPrint('AI Vibe call error: \$e');
+    }
+    return _fallbackDailyVibe(weather, language);
+  }
+
+  Future<String> answerWeatherQuery(String query, WeatherData weather, String language) async {
+    final apiKey = _aiApiKey;
+    if (apiKey.isEmpty) {
+      return _fallbackChatAnswer(query, weather);
+    }
+
+    final prompt = '''
+Answer weather query for \${weather.location.name} using this real data:
+Current: \${weather.current.tempC}°C, \${weather.current.conditionText}, Humidity \${weather.current.humidity}%.
+User Query: "\$query"
+Reply in 2 short Hinglish sentences.
+''';
+
+    try {
+      final responseText = await _callAiApi(prompt, apiKey);
+      if (responseText != null && responseText.trim().isNotEmpty) {
+        return responseText.trim();
+      }
+    } catch (e) {
+      debugPrint('AI Chat error: \$e');
+    }
+    return _fallbackChatAnswer(query, weather);
+  }
+
+  Future<String?> _callAiApi(String prompt, String apiKey) async {
+    if (apiKey.startsWith('sk-ant-') || apiKey.contains('claude')) {
+      final url = Uri.parse('https://api.anthropic.com/v1/messages');
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: json.encode({
+          'model': 'claude-3-5-haiku-20241022',
+          'max_tokens': 120,
+          'messages': [
+            {'role': 'user', 'content': prompt}
+          ]
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final content = data['content'] as List<dynamic>?;
+        if (content != null && content.isNotEmpty) {
+          return content.first['text']?.toString();
+        }
+      }
+    } else {
+      final url = Uri.parse('https://api.openai.com/v1/chat/completions');
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer \$apiKey',
+        },
+        body: json.encode({
+          'model': 'gpt-4o-mini',
+          'max_tokens': 120,
+          'messages': [
+            {'role': 'user', 'content': prompt}
+          ]
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final choices = data['choices'] as List<dynamic>?;
+        if (choices != null && choices.isNotEmpty) {
+          return choices.first['message']?['content']?.toString();
+        }
+      }
+    }
+    return null;
+  }
+
+  String _fallbackDailyVibe(WeatherData weather, String language) {
+    final temp = weather.current.tempC;
+    final cond = weather.current.conditionText.toLowerCase();
+
+    if (cond.contains('rain')) {
+      return 'Aaj barish hone ka emkan hai, chhatri saath rakhna mat bhoolna! ☔';
+    } else if (temp > 30) {
+      return 'Aaj kaafi garmi hai! Khub paani piyo aur cotton kapde pehno. ☀️';
+    } else if (temp < 15) {
+      return 'Aaj thandak hai, halki jacket ya sweater pehen kar niklo. 🧥';
+    } else {
+      return 'Mausam Behad khushgowar hai! Aaj outdoor plans ke liye behtareen din hai. ✨';
+    }
+  }
+
+  String _fallbackChatAnswer(String query, WeatherData weather) {
+    return 'Current weather in \${weather.location.name}: \${weather.current.tempC}°C, \${weather.current.conditionText}. Rain chance: \${weather.daily.isNotEmpty ? weather.daily.first.chanceOfRain : 0}%.';
   }
 }`
 };
