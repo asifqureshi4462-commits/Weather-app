@@ -90,6 +90,11 @@ class WeatherProvider with ChangeNotifier {
         condition: data.current.conditionText,
         tempText: isMetric ? '${data.current.tempC.round()}°C' : '${data.current.tempF.round()}°F',
       );
+      _notificationService.scheduleDailyMorningNotification(
+        cityName: data.location.name,
+        condition: data.current.conditionText,
+        tempText: isMetric ? '${data.current.tempC.round()}°C' : '${data.current.tempF.round()}°F',
+      );
     } catch (e) {
       _errorMessage = e.toString().replaceAll('Exception: ', '');
     } finally {

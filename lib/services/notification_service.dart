@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotificationService {
@@ -15,15 +16,54 @@ class NotificationService {
       const AndroidInitializationSettings androidSettings =
           AndroidInitializationSettings('@mipmap/ic_launcher');
 
-      const InitializationSettings initSettings = InitializationSettings(
-        android: androidSettings,
+      const DarwinInitializationSettings iosSettings = DarwinInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
       );
 
-      await _notificationsPlugin.initialize(initSettings);
+      const InitializationSettings initSettings = InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      );
+
+      await _notificationsPlugin.initialize(
+        initSettings,
+        onDidReceiveNotificationResponse: (NotificationResponse response) {
+          debugPrint('Notification tapped: ${response.payload}');
+        },
+      );
+
       _isInitialized = true;
-    } catch (_) {
-      // Gracefully continue if notification permissions/system isn't available
+      await requestPermissions();
+    } catch (e) {
+      debugPrint('Error initializing notifications: $e');
     }
+  }
+
+  Future<bool> requestPermissions() async {
+    try {
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        final androidImplementation =
+            _notificationsPlugin.resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>();
+        final granted = await androidImplementation?.requestNotificationsPermission();
+        return granted ?? false;
+      } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+        final iosImplementation =
+            _notificationsPlugin.resolvePlatformSpecificImplementation<
+                IOSFlutterLocalNotificationsPlugin>();
+        final granted = await iosImplementation?.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+        return granted ?? false;
+      }
+    } catch (e) {
+      debugPrint('Error requesting notification permissions: $e');
+    }
+    return false;
   }
 
   Future<void> showDailyWeatherNotification({
@@ -38,12 +78,13 @@ class NotificationService {
         'daily_weather_channel',
         'Daily Weather Digest',
         channelDescription: 'Daily weather forecast notifications',
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
+        importance: Importance.high,
+        priority: Priority.high,
       );
 
       const NotificationDetails platformDetails = NotificationDetails(
         android: androidDetails,
+        iOS: DarwinNotificationDetails(),
       );
 
       await _notificationsPlugin.show(
@@ -52,6 +93,50 @@ class NotificationService {
         'Current condition: $condition • $tempText',
         platformDetails,
       );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error showing daily weather notification: $e');
+    }
+  }
+
+  Future<void> scheduleDailyMorningNotification({
+    required String cityName,
+    required String condition,
+    required String tempText,
+  }) async {
+    if (!_isInitialized) await init();
+
+    try {
+      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'daily_weather_scheduled_channel',
+        'Scheduled Morning Weather',
+        channelDescription: 'Daily morning weather summary for favorite city',
+        importance: Importance.high,
+        priority: Priority.high,
+      );
+
+      const NotificationDetails platformDetails = NotificationDetails(
+        android: androidDetails,
+        iOS: DarwinNotificationDetails(),
+      );
+
+      await _notificationsPlugin.periodicallyShow(
+        1002,
+        'Morning Weather Summary: $cityName',
+        'Today\'s forecast for $cityName: $condition • $tempText',
+        RepeatInterval.daily,
+        platformDetails,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+    } catch (e) {
+      debugPrint('Error scheduling daily morning notification: $e');
+    }
+  }
+
+  Future<void> cancelAll() async {
+    try {
+      await _notificationsPlugin.cancelAll();
+    } catch (e) {
+      debugPrint('Error cancelling notifications: $e');
+    }
   }
 }
