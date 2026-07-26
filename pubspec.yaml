@@ -22,8 +22,22 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_native_splash: ^2.4.1
 
 flutter:
   uses-material-design: true
   assets:
     - .env
+    - assets/atmosphere_weather_logo.png
+
+flutter_native_splash:
+  color: "#0D0D0D"
+  image: assets/atmosphere_weather_logo.png
+  color_dark: "#0D0D0D"
+  image_dark: assets/atmosphere_weather_logo.png
+
+  android_12:
+    image: assets/atmosphere_weather_logo.png
+    icon_background_color: "#0D0D0D"
+    image_dark: assets/atmosphere_weather_logo.png
+    icon_background_color_dark: "#0D0D0D"
