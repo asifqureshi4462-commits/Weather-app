@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import JSZip from 'jszip';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid
+} from 'recharts';
 import {
   Cloud,
   Sun,
@@ -23,6 +33,7 @@ import {
   Code,
   Smartphone,
   Github,
+  ChevronLeft,
   ChevronRight,
   Sparkles,
   Info,
@@ -32,7 +43,10 @@ import {
   FolderTree,
   ExternalLink,
   ChevronDown,
-  AlertTriangle
+  AlertTriangle,
+  Sunrise,
+  Sunset,
+  Moon
 } from 'lucide-react';
 
 // Code files dictionary mapping file path to content for easy download/preview
@@ -603,6 +617,9 @@ interface MockCityWeather {
   pressureMb: number;
   visibilityKm: number;
   isDay: boolean;
+  sunrise: string;
+  sunset: string;
+  sunProgress: number;
   hourly: { time: string; tempC: number; tempF: number; condition: string; rainChance: number }[];
   daily: { day: string; condition: string; highC: number; lowC: number; highF: number; lowF: number; rainChance: number }[];
 }
@@ -628,6 +645,9 @@ const MOCK_WEATHER_DATABASE: Record<string, MockCityWeather> = {
     pressureMb: 1018,
     visibilityKm: 10,
     isDay: true,
+    sunrise: '05:42 AM',
+    sunset: '08:35 PM',
+    sunProgress: 65,
     hourly: [
       { time: 'Now', tempC: 18, tempF: 64, condition: 'Partly Cloudy', rainChance: 10 },
       { time: '2 PM', tempC: 19, tempF: 66, condition: 'Sunny', rainChance: 0 },
@@ -666,6 +686,9 @@ const MOCK_WEATHER_DATABASE: Record<string, MockCityWeather> = {
     pressureMb: 1014,
     visibilityKm: 10,
     isDay: true,
+    sunrise: '05:58 AM',
+    sunset: '08:12 PM',
+    sunProgress: 72,
     hourly: [
       { time: 'Now', tempC: 26, tempF: 79, condition: 'Sunny', rainChance: 0 },
       { time: '2 PM', tempC: 28, tempF: 82, condition: 'Sunny', rainChance: 0 },
@@ -702,7 +725,10 @@ const MOCK_WEATHER_DATABASE: Record<string, MockCityWeather> = {
     aqiPm25: 6.2,
     pressureMb: 1010,
     visibilityKm: 8,
-    isDay: true,
+    isDay: false,
+    sunrise: '04:45 AM',
+    sunset: '06:50 PM',
+    sunProgress: 80,
     hourly: [
       { time: 'Now', tempC: 22, tempF: 72, condition: 'Light Rain', rainChance: 65 },
       { time: '2 PM', tempC: 23, tempF: 73, condition: 'Moderate Rain', rainChance: 80 },
@@ -739,6 +765,9 @@ const MOCK_WEATHER_DATABASE: Record<string, MockCityWeather> = {
     pressureMb: 1005,
     visibilityKm: 5,
     isDay: true,
+    sunrise: '06:30 AM',
+    sunset: '08:10 PM',
+    sunProgress: 55,
     hourly: [
       { time: 'Now', tempC: 29, tempF: 84, condition: 'Severe Thunderstorm', rainChance: 95 },
       { time: '2 PM', tempC: 28, tempF: 82, condition: 'Thunderstorm', rainChance: 90 },
@@ -774,7 +803,10 @@ const MOCK_WEATHER_DATABASE: Record<string, MockCityWeather> = {
     aqiPm25: 7.0,
     pressureMb: 998,
     visibilityKm: 3,
-    isDay: true,
+    isDay: false,
+    sunrise: '05:40 AM',
+    sunset: '08:20 PM',
+    sunProgress: 42,
     hourly: [
       { time: 'Now', tempC: -2, tempF: 28, condition: 'Heavy Snow', rainChance: 90 },
       { time: '2 PM', tempC: -1, tempF: 30, condition: 'Heavy Snow', rainChance: 85 },
@@ -846,8 +878,85 @@ export default function App() {
   const [activeFile, setActiveFile] = useState<string>('pubspec.yaml');
   const [copiedFile, setCopiedFile] = useState<boolean>(false);
   const [isZipping, setIsZipping] = useState<boolean>(false);
+  const [dragDirection, setDragDirection] = useState<'left' | 'right' | null>(null);
+  const [overrideIsDayMap, setOverrideIsDayMap] = useState<Record<string, boolean>>({});
 
-  const currentWeather = MOCK_WEATHER_DATABASE[selectedCity] || MOCK_WEATHER_DATABASE['London'];
+  // Auto-detect Celsius or Fahrenheit based on user locale, timezone, or geolocation on app load
+  useEffect(() => {
+    const detectLocaleUnit = () => {
+      try {
+        const languages = navigator.languages || [navigator.language];
+        const isUSLocale = languages.some(
+          (lang) => lang && (lang.toUpperCase().endsWith('-US') || lang.toUpperCase() === 'EN-US')
+        );
+
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        const isUSTimeZone =
+          timeZone.startsWith('America/') &&
+          (timeZone.includes('New_York') ||
+            timeZone.includes('Chicago') ||
+            timeZone.includes('Los_Angeles') ||
+            timeZone.includes('Denver') ||
+            timeZone.includes('Phoenix') ||
+            timeZone.includes('Anchorage') ||
+            timeZone.includes('Honolulu') ||
+            timeZone.includes('Detroit') ||
+            timeZone.includes('Indiana') ||
+            timeZone.includes('Kentucky') ||
+            timeZone.includes('Boise'));
+
+        if (isUSLocale || isUSTimeZone) {
+          setIsMetric(false);
+        } else {
+          setIsMetric(true);
+        }
+      } catch {
+        setIsMetric(true);
+      }
+    };
+
+    detectLocaleUnit();
+
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const isUSCoords =
+            (latitude >= 24.39 && latitude <= 49.38 && longitude >= -125.0 && longitude <= -66.93) ||
+            (latitude >= 18.91 && latitude <= 28.4 && longitude >= -178.33 && longitude <= -154.8) ||
+            (latitude >= 51.2 && latitude <= 71.38 && longitude >= -179.15 && longitude <= -129.97);
+
+          if (isUSCoords) {
+            setIsMetric(false);
+          }
+        },
+        () => {},
+        { timeout: 3000 }
+      );
+    }
+  }, []);
+
+  const cityKeys = Object.keys(MOCK_WEATHER_DATABASE);
+
+  const handleNextCity = () => {
+    const curIdx = cityKeys.indexOf(selectedCity);
+    const nextIdx = (curIdx + 1) % cityKeys.length;
+    setDragDirection('left');
+    setSelectedCity(cityKeys[nextIdx]);
+  };
+
+  const handlePrevCity = () => {
+    const curIdx = cityKeys.indexOf(selectedCity);
+    const prevIdx = (curIdx - 1 + cityKeys.length) % cityKeys.length;
+    setDragDirection('right');
+    setSelectedCity(cityKeys[prevIdx]);
+  };
+
+  const baseWeather = MOCK_WEATHER_DATABASE[selectedCity] || MOCK_WEATHER_DATABASE['London'];
+  const currentWeather = {
+    ...baseWeather,
+    isDay: overrideIsDayMap[selectedCity] !== undefined ? overrideIsDayMap[selectedCity] : baseWeather.isDay,
+  };
 
   const handleCopyCode = () => {
     const content = FLUTTER_FILES[activeFile];
@@ -981,7 +1090,18 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
                 </div>
 
                 {/* Inner Mobile Screen Canvas */}
-                <div className="w-full h-full rounded-[32px] overflow-hidden flex flex-col relative bg-gradient-to-b from-sky-700 via-indigo-900 to-slate-950 text-white pt-7">
+                <div className={`w-full h-full rounded-[32px] overflow-hidden flex flex-col relative transition-all duration-700 ease-in-out text-white pt-7 ${
+                  currentWeather.isDay
+                    ? 'bg-gradient-to-b from-sky-500 via-sky-800 to-indigo-950'
+                    : 'bg-gradient-to-b from-slate-950 via-indigo-950 to-black'
+                }`}>
+                  {/* Atmospheric Glow Overlay */}
+                  <div
+                    className={`absolute -top-16 -right-16 w-56 h-56 rounded-full blur-3xl pointer-events-none transition-all duration-700 ${
+                      currentWeather.isDay ? 'bg-amber-400/25 opacity-100' : 'bg-indigo-500/30 opacity-80'
+                    }`}
+                  />
+
                   {/* Flutter AppBar */}
                   <div className="px-4 py-2 flex items-center justify-between z-20">
                     <div className="flex items-center gap-2">
@@ -991,6 +1111,26 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
                       <span className="font-bold text-lg tracking-tight">Atmosphere</span>
                     </div>
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={() =>
+                          setOverrideIsDayMap((prev) => ({
+                            ...prev,
+                            [selectedCity]: !currentWeather.isDay,
+                          }))
+                        }
+                        className={`p-1.5 rounded-full backdrop-blur border text-xs font-semibold transition flex items-center gap-1 ${
+                          currentWeather.isDay
+                            ? 'bg-amber-400/20 border-amber-300/40 text-amber-200 hover:bg-amber-400/30'
+                            : 'bg-indigo-900/60 border-indigo-400/40 text-indigo-200 hover:bg-indigo-800/60'
+                        }`}
+                        title={`Switch to ${currentWeather.isDay ? 'Night' : 'Day'} mode`}
+                      >
+                        {currentWeather.isDay ? (
+                          <Sun className="w-3.5 h-3.5 text-amber-300" />
+                        ) : (
+                          <Moon className="w-3.5 h-3.5 text-indigo-300" />
+                        )}
+                      </button>
                       <button
                         onClick={() => setIsMetric(!isMetric)}
                         className="px-2 py-0.5 bg-white/10 backdrop-blur rounded-full text-xs font-semibold hover:bg-white/20 transition"
@@ -1047,58 +1187,198 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
 
                   {/* Scrollable Mobile Body */}
                   <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-4 text-xs scrollbar-thin scrollbar-thumb-slate-700">
-                    {/* Hero Current Weather Card */}
-                    <div
-                      key={selectedCity}
-                      className="animate-card-entrance p-5 rounded-2xl bg-black/30 backdrop-blur border border-white/15 flex flex-col items-center text-center shadow-lg transition-all duration-300"
-                    >
-                      <p className="text-base font-bold text-white">{currentWeather.name}</p>
-                      <p className="text-[10px] text-cyan-200 mb-2">{currentWeather.country}</p>
+                    {/* Hero Current Weather Card with Horizontal Drag Gesture */}
+                    <div className="relative overflow-hidden rounded-2xl">
+                      <AnimatePresence mode="wait" custom={dragDirection}>
+                        <motion.div
+                          key={selectedCity}
+                          drag="x"
+                          dragConstraints={{ left: 0, right: 0 }}
+                          dragElastic={0.25}
+                          onDragEnd={(_, info) => {
+                            if (info.offset.x < -35 || info.velocity.x < -180) {
+                              handleNextCity();
+                            } else if (info.offset.x > 35 || info.velocity.x > 180) {
+                              handlePrevCity();
+                            }
+                          }}
+                          initial={{
+                            opacity: 0,
+                            x: dragDirection === 'left' ? 80 : dragDirection === 'right' ? -80 : 0,
+                            scale: 0.95
+                          }}
+                          animate={{ opacity: 1, x: 0, scale: 1 }}
+                          exit={{
+                            opacity: 0,
+                            x: dragDirection === 'left' ? -80 : dragDirection === 'right' ? 80 : 0,
+                            scale: 0.95
+                          }}
+                          transition={{ duration: 0.25, ease: 'easeOut' }}
+                          className="p-5 rounded-2xl bg-black/30 backdrop-blur border border-white/15 flex flex-col items-center text-center shadow-lg cursor-grab active:cursor-grabbing select-none relative group touch-pan-y"
+                        >
+                          {/* Left/Right Arrow Nav Buttons */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePrevCity();
+                            }}
+                            className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/40 backdrop-blur border border-white/10 text-slate-300 opacity-60 hover:opacity-100 hover:text-white transition shadow-sm z-10"
+                            title="Previous city (Swipe Right)"
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleNextCity();
+                            }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/40 backdrop-blur border border-white/10 text-slate-300 opacity-60 hover:opacity-100 hover:text-white transition shadow-sm z-10"
+                            title="Next city (Swipe Left)"
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
 
-                      <div className="flex items-center gap-2 my-2">
-                        {currentWeather.condition.includes('Sunny') ? (
-                          <Sun className="w-16 h-16 text-amber-400 animate-spin-slow" />
-                        ) : currentWeather.condition.includes('Rain') ? (
-                          <CloudRain className="w-16 h-16 text-cyan-300" />
-                        ) : (
-                          <Cloud className="w-16 h-16 text-slate-200" />
-                        )}
-                        <span className="text-5xl font-extralight tracking-tighter">
-                          {isMetric ? `${currentWeather.tempC}°` : `${currentWeather.tempF}°`}
-                        </span>
-                      </div>
+                          <p className="text-base font-bold text-white">{currentWeather.name}</p>
+                          <p className="text-[10px] text-cyan-200 mb-2">{currentWeather.country}</p>
 
-                      <p className="font-semibold text-sm">{currentWeather.condition}</p>
-                      <p className="text-[11px] text-slate-300">
-                        Feels like {isMetric ? `${currentWeather.feelsLikeC}°C` : `${currentWeather.feelsLikeF}°F`}
-                      </p>
+                          <div className="flex items-center gap-2 my-2">
+                            {currentWeather.isDay ? (
+                              currentWeather.condition.includes('Sunny') ? (
+                                <Sun className="w-16 h-16 text-amber-400 animate-spin-slow" />
+                              ) : currentWeather.condition.includes('Rain') ? (
+                                <CloudRain className="w-16 h-16 text-cyan-300" />
+                              ) : currentWeather.condition.includes('Snow') ? (
+                                <CloudSnow className="w-16 h-16 text-sky-200" />
+                              ) : (
+                                <Cloud className="w-16 h-16 text-slate-200" />
+                              )
+                            ) : (
+                              currentWeather.condition.includes('Clear') || currentWeather.condition.includes('Sunny') ? (
+                                <Moon className="w-16 h-16 text-indigo-200 animate-pulse drop-shadow-[0_0_12px_rgba(165,180,252,0.6)]" />
+                              ) : currentWeather.condition.includes('Rain') ? (
+                                <CloudRain className="w-16 h-16 text-indigo-300" />
+                              ) : currentWeather.condition.includes('Snow') ? (
+                                <CloudSnow className="w-16 h-16 text-sky-200" />
+                              ) : (
+                                <Cloud className="w-16 h-16 text-slate-400" />
+                              )
+                            )}
+                            <span className="text-5xl font-extralight tracking-tighter">
+                              {isMetric ? `${currentWeather.tempC}°` : `${currentWeather.tempF}°`}
+                            </span>
+                          </div>
+
+                          <p className="font-semibold text-sm">{currentWeather.condition}</p>
+                          <p className="text-[11px] text-slate-300">
+                            Feels like {isMetric ? `${currentWeather.feelsLikeC}°C` : `${currentWeather.feelsLikeF}°F`}
+                          </p>
+
+                          {/* Saved City Pagination Dots */}
+                          <div className="flex items-center justify-center gap-1.5 mt-3">
+                            {cityKeys.map((city, idx) => {
+                              const curIdx = cityKeys.indexOf(selectedCity);
+                              return (
+                                <button
+                                  key={city}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDragDirection(idx > curIdx ? 'left' : 'right');
+                                    setSelectedCity(city);
+                                  }}
+                                  className={`h-1.5 rounded-full transition-all ${
+                                    city === selectedCity ? 'w-4 bg-cyan-400' : 'w-1.5 bg-white/30 hover:bg-white/50'
+                                  }`}
+                                  title={`View ${city}`}
+                                />
+                              );
+                            })}
+                          </div>
+                          <span className="text-[9px] text-slate-400/80 mt-1 font-mono tracking-wider">
+                            ‹ Drag card left / right to switch cities ›
+                          </span>
+                        </motion.div>
+                      </AnimatePresence>
                     </div>
 
                     {/* Conditional Severe Weather Alert Banner */}
                     <AlertBanner condition={currentWeather.condition} cityName={currentWeather.name} />
 
-                    {/* Hourly Forecast Horizontal Scroll */}
-                    <div className="space-y-1.5">
-                      <p className="text-[10px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1">
-                        <Thermometer className="w-3 h-3 text-cyan-400" />
-                        Hourly Forecast (24 hrs)
-                      </p>
-                      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                        {currentWeather.hourly.map((h, idx) => (
-                          <div
-                            key={idx}
-                            className="flex-shrink-0 w-16 p-2 rounded-xl bg-black/20 border border-white/10 flex flex-col items-center gap-1 text-center"
+                    {/* Hourly Forecast Recharts Temperature Trend */}
+                    <div className="p-3 rounded-xl bg-black/20 border border-white/10 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1">
+                          <Thermometer className="w-3 h-3 text-cyan-400" />
+                          Hourly Temperature Trend
+                        </p>
+                        <span className="text-[9px] font-semibold text-cyan-300 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40 font-mono">
+                          {isMetric ? '°C' : '°F'}
+                        </span>
+                      </div>
+                      <div className="h-32 w-full pt-1">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart
+                            data={currentWeather.hourly.map((h) => ({
+                              time: h.time,
+                              temp: isMetric ? h.tempC : h.tempF,
+                              rainChance: h.rainChance,
+                              condition: h.condition,
+                            }))}
+                            margin={{ top: 10, right: 10, left: -25, bottom: 0 }}
                           >
-                            <span className="text-[10px] text-slate-300">{h.time}</span>
-                            <Cloud className="w-4 h-4 text-cyan-200" />
-                            {h.rainChance > 0 && (
-                              <span className="text-[9px] text-cyan-400 font-bold">{h.rainChance}%</span>
-                            )}
-                            <span className="font-bold text-xs">
-                              {isMetric ? `${h.tempC}°` : `${h.tempF}°`}
-                            </span>
-                          </div>
-                        ))}
+                            <defs>
+                              <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.4} />
+                                <stop offset="95%" stopColor="#22d3ee" stopOpacity={0.0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff15" vertical={false} />
+                            <XAxis
+                              dataKey="time"
+                              tick={{ fill: '#94a3b8', fontSize: 9 }}
+                              axisLine={false}
+                              tickLine={false}
+                            />
+                            <YAxis
+                              domain={['dataMin - 2', 'dataMax + 2']}
+                              tick={{ fill: '#94a3b8', fontSize: 9 }}
+                              axisLine={false}
+                              tickLine={false}
+                              tickFormatter={(val) => `${val}°`}
+                            />
+                            <Tooltip
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  const data = payload[0].payload;
+                                  return (
+                                    <div className="bg-slate-900/90 border border-white/20 p-2 rounded-lg backdrop-blur text-[10px] text-white shadow-xl space-y-0.5">
+                                      <p className="font-bold text-cyan-300">{data.time}</p>
+                                      <p className="font-semibold text-xs">
+                                        {data.temp}{isMetric ? '°C' : '°F'}
+                                      </p>
+                                      <p className="text-slate-300 text-[9px]">{data.condition}</p>
+                                      {data.rainChance > 0 && (
+                                        <p className="text-cyan-400 text-[9px] font-bold">
+                                          💧 {data.rainChance}% rain
+                                        </p>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <Area
+                              type="monotone"
+                              dataKey="temp"
+                              stroke="#22d3ee"
+                              strokeWidth={2}
+                              fillOpacity={1}
+                              fill="url(#tempGradient)"
+                              dot={{ r: 3, fill: '#0891b2', stroke: '#22d3ee', strokeWidth: 1.5 }}
+                              activeDot={{ r: 5, fill: '#38bdf8', stroke: '#ffffff', strokeWidth: 2 }}
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
                       </div>
                     </div>
 
@@ -1165,6 +1445,53 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
                         </div>
                         <span className="text-base font-bold my-1">AQI {currentWeather.aqiEpa}</span>
                         <span className="text-[9px] text-slate-400">PM2.5: {currentWeather.aqiPm25}</span>
+                      </div>
+                    </div>
+
+                    {/* Sun Phase Card */}
+                    <div className="p-3 rounded-xl bg-black/20 border border-white/10 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-slate-300">
+                          <Sun className="w-3.5 h-3.5 text-amber-400" />
+                          <span className="text-[10px] font-bold tracking-wider uppercase">Sun Phase</span>
+                        </div>
+                        <span className="text-[9px] font-semibold text-amber-300 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-800/40">
+                          {currentWeather.isDay ? 'Daylight' : 'Night'}
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-[11px] font-semibold">
+                          <div className="flex items-center gap-1 text-amber-300">
+                            <Sunrise className="w-3.5 h-3.5 text-amber-400" />
+                            <span>{currentWeather.sunrise}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-normal">
+                            ~14h daylight
+                          </div>
+                          <div className="flex items-center gap-1 text-orange-400">
+                            <Sunset className="w-3.5 h-3.5 text-orange-400" />
+                            <span>{currentWeather.sunset}</span>
+                          </div>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="relative pt-1 pb-0.5">
+                          <div className="h-2 w-full bg-slate-800/80 rounded-full overflow-hidden p-0.5 border border-white/10 relative">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500 transition-all duration-500 relative"
+                              style={{ width: `${currentWeather.sunProgress}%` }}
+                            >
+                              <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-2.5 h-2.5 rounded-full bg-amber-200 border border-white shadow-[0_0_6px_rgba(251,191,36,0.9)]" />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-between text-[9px] text-slate-400 font-medium pt-0.5">
+                          <span>Dawn</span>
+                          <span className="text-amber-200 font-bold">{currentWeather.sunProgress}% Progress</span>
+                          <span>Dusk</span>
+                        </div>
                       </div>
                     </div>
 
