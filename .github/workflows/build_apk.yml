@@ -74,11 +74,12 @@ jobs:
 
       - name: DEBUG - Print google_mobile_ads build.gradle content
         run: |
-          echo "===== Locating google_mobile_ads build.gradle ====="
-          find / -path "*google_mobile_ads*/android/build.gradle" 2>/dev/null
-          echo "===== Full content ====="
-          find / -path "*google_mobile_ads*/android/build.gradle" 2>/dev/null -exec cat {} \;
+          echo "===== Full content of google_mobile_ads android/build.gradle ====="
+          GRADLE_FILE=$(find "$HOME/.pub-cache/hosted/pub.dev" -maxdepth 2 -iname "google_mobile_ads-*" -type d 2>/dev/null | head -1)
+          echo "Found package dir: $GRADLE_FILE"
+          cat -n "$GRADLE_FILE/android/build.gradle" || echo "Could not read file"
           echo "===== End content ====="
+        continue-on-error: true
 
       - name: Generate Native Splash Screen
         run: flutter pub run flutter_native_splash:create
