@@ -59,9 +59,8 @@ jobs:
           fi
 
       - name: Build Release APK
-        run: flutter build apk --release: Build Release APK
         run: flutter build apk --release
-
+        
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
