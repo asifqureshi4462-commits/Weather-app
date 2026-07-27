@@ -67,10 +67,10 @@ jobs:
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
-            if ! grep -q "flutterEmbedding" "$MANIFEST"; then
-              echo "Injecting Android v2 embedding metadata into AndroidManifest.xml..."
-              sed -i '/<activity/a \            <meta-data android:name="flutterEmbedding" android:value="2" \/>' "$MANIFEST"
-            fi
+            echo "Enforcing Flutter v2 embedding placement in AndroidManifest.xml..."
+            sed -i '/flutterEmbedding/d' "$MANIFEST" || true
+            sed -i '/<application/a \        <meta-data android:name="flutterEmbedding" android:value="2" \/>' "$MANIFEST"
+            echo "Flutter v2 embedding tag successfully set inside <application> tag."
           fi
 
       - name: Build Release APK
