@@ -48,7 +48,9 @@ import {
   Sunset,
   Moon,
   ArrowUp,
-  LayoutGrid
+  LayoutGrid,
+  WifiOff,
+  Wifi
 } from 'lucide-react';
 
 // Code files dictionary mapping file path to content for easy download/preview
@@ -185,24 +187,20 @@ jobs:
 
       - name: Ensure Flutter v2 Embedding (MainActivity & AndroidManifest)
         run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            echo "Enforcing Flutter v2 embedding placement in AndroidManifest.xml..."
-            sed -i '/flutterEmbedding/d' "$MANIFEST" || true
-            sed -i '/<application/a \        <meta-data android:name="flutterEmbedding" android:value="2" \/>' "$MANIFEST"
-            echo "Flutter v2 embedding tag successfully set inside <application> tag."
-          fi
-
-          echo "Deleting legacy v1 MainActivity.java if present..."
-          find android/app/src/main -name "MainActivity.java" -delete 2>/dev/null || true
+          echo "Cleaning up any legacy v1 files across android directory..."
+          find android/ -name "MainActivity.java" -delete 2>/dev/null || true
 
           MAIN_KT_DIR="android/app/src/main/kotlin/com/example/atmosphere_weather"
-          MAIN_JAVA_DIR="android/app/src/main/java/com/example/atmosphere_weather"
-          mkdir -p "$MAIN_KT_DIR" "$MAIN_JAVA_DIR"
-
+          mkdir -p "$MAIN_KT_DIR"
           printf 'package com.example.atmosphere_weather\n\nimport io.flutter.embedding.android.FlutterActivity\n\nclass MainActivity: FlutterActivity() {\n}\n' > "$MAIN_KT_DIR/MainActivity.kt"
-          cp "$MAIN_KT_DIR/MainActivity.kt" "$MAIN_JAVA_DIR/MainActivity.kt"
-          echo "Flutter v2 embedding MainActivity.kt generated successfully."
+
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            echo "Verifying Flutter v2 embedding tag in AndroidManifest.xml..."
+            sed -i '/flutterEmbedding/d' "$MANIFEST" || true
+            sed -i 's|</application>|        <meta-data android:name="flutterEmbedding" android:value="2" />\n    </application>|' "$MANIFEST"
+          fi
+          echo "Flutter v2 embedding successfully configured."
 
       - name: Build Release APK
         run: flutter build apk --release
@@ -563,6 +561,461 @@ class _SplashScreenState extends State<SplashScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}`,
+
+  'lib/screens/home_screen.dart': `import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/weather_provider.dart';
+import '../models/weather_model.dart';
+import '../services/ad_service.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  String _getOfflineBannerText(DateTime? lastFetchTime) {
+    if (lastFetchTime == null) {
+      return 'Last updated recently (offline)';
+    }
+    final diffMins = DateTime.now().difference(lastFetchTime).inMinutes;
+    if (diffMins <= 0) {
+      return 'Last updated just now (offline)';
+    } else if (diffMins == 1) {
+      return 'Last updated 1 min ago (offline)';
+    } else {
+      return 'Last updated \$diffMins mins ago (offline)';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final weatherProvider = context.watch<WeatherProvider>();
+    final weather = weatherProvider.weatherData;
+    final isOffline = weatherProvider.isOffline;
+
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Row(
+          children: [
+            Icon(Icons.cloud_queue_rounded, color: Colors.white),
+            SizedBox(width: 8),
+            Text(
+              'Atmosphere',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(
+              weatherProvider.isMetric ? Icons.thermostat_rounded : Icons.square_foot_rounded,
+              color: Colors.white,
+            ),
+            tooltip: 'Toggle °C / °F',
+            onPressed: () {
+              weatherProvider.setUnitPreference(!weatherProvider.isMetric);
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            tooltip: 'Refresh Weather',
+            onPressed: () {
+              AdService().recordUserAction();
+              weatherProvider.fetchWeather(weatherProvider.currentCity);
+            },
+          ),
+        ],
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: (weather?.current.isDay ?? true)
+                ? [const Color(0xFF0284C7), const Color(0xFF075985), const Color(0xFF0F172A)]
+                : [const Color(0xFF0F172A), const Color(0xFF1E1B4B), const Color(0xFF020617)],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Search Input Bar
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: TextField(
+                  controller: _searchController,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'Search city (e.g. London, Tokyo)...',
+                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+                    prefixIcon: const Icon(Icons.search, color: Colors.white70),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.send_rounded, color: Colors.white70),
+                      onPressed: () {
+                        if (_searchController.text.trim().isNotEmpty) {
+                          weatherProvider.fetchWeather(_searchController.text.trim());
+                          _searchController.clear();
+                          FocusScope.of(context).unfocus();
+                        }
+                      },
+                    ),
+                    filled: true,
+                    fillColor: Colors.black.withOpacity(0.25),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: Colors.cyanAccent),
+                    ),
+                  ),
+                  onSubmitted: (value) {
+                    if (value.trim().isNotEmpty) {
+                      weatherProvider.fetchWeather(value.trim());
+                      _searchController.clear();
+                    }
+                  },
+                ),
+              ),
+
+              // Dynamic Clear, Non-Intrusive Offline Mode Banner
+              if (isOffline)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Colors.amber.withOpacity(0.45),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.25),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.wifi_off_rounded,
+                          size: 16,
+                          color: Color(0xFFFCD34D),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _getOfflineBannerText(weatherProvider.lastFetchTime),
+                          style: const TextStyle(
+                            color: Color(0xFFFEF3C7),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.1,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.25),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: Colors.amber.withOpacity(0.5),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: const Text(
+                          'OFFLINE',
+                          style: TextStyle(
+                            color: Color(0xFFFBBF24),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.6,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Loading Indicator or Error or Weather Content
+              Expanded(
+                child: weatherProvider.isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(color: Colors.cyanAccent),
+                      )
+                    : weatherProvider.errorMessage != null && weather == null
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24.0),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.cloud_off_rounded, size: 64, color: Colors.amber),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    weatherProvider.errorMessage!,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton(
+                                    onPressed: () => weatherProvider.fetchWeather(weatherProvider.currentCity),
+                                    child: const Text('Try Again'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : weather == null
+                            ? const Center(child: Text('No weather data', style: TextStyle(color: Colors.white)))
+                            : RefreshIndicator(
+                                onRefresh: () async {
+                                  await weatherProvider.fetchWeather(weatherProvider.currentCity);
+                                },
+                                child: SingleChildScrollView(
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      // Weather Hero Display
+                                      _buildHeroWeatherCard(context, weather, weatherProvider.isMetric),
+                                      const SizedBox(height: 16),
+
+                                      // AI Vibe Summary Widget
+                                      if (weatherProvider.aiVibe.isNotEmpty)
+                                        _buildAiVibeCard(weatherProvider.aiVibe),
+
+                                      const SizedBox(height: 16),
+
+                                      // Hourly Forecast List
+                                      _buildHourlySection(weather),
+
+                                      const SizedBox(height: 16),
+
+                                      // 7-Day Forecast
+                                      _buildDailySection(weather, weatherProvider.isMetric),
+
+                                      const SizedBox(height: 16),
+
+                                      // Detailed Metrics Grid (Wind, Humidity, UV, AQI, Pressure)
+                                      _buildMetricsGrid(weather, weatherProvider.isMetric),
+
+                                      const SizedBox(height: 24),
+                                    ],
+                                  ),
+                                ),
+                              ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeroWeatherCard(BuildContext context, WeatherData weather, bool isMetric) {
+    final tempStr = isMetric ? '\${weather.current.tempC.round()}°C' : '\${weather.current.tempF.round()}°F';
+    final feelsLikeStr = isMetric ? '\${weather.current.feelsLikeC.round()}°C' : '\${weather.current.feelsLikeF.round()}°F';
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.25),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.15)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            weather.location.name,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          Text(
+            weather.location.country,
+            style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.7)),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            tempStr,
+            style: const TextStyle(fontSize: 56, fontWeight: FontWeight.w200, color: Colors.white),
+          ),
+          Text(
+            weather.current.conditionText,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Feels like \$feelsLikeStr',
+            style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.8)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAiVibeCard(String aiVibe) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.deepPurple.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.deepPurpleAccent.withOpacity(0.5)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.auto_awesome, color: Colors.amberAccent, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              aiVibe,
+              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHourlySection(WeatherData weather) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('HOURLY FORECAST', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white70)),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 90,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: 6,
+            itemBuilder: (context, index) {
+              return Container(
+                width: 70,
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Text('\${index + 12}:00', style: const TextStyle(fontSize: 11, color: Colors.white70)),
+                    const Icon(Icons.wb_sunny_rounded, color: Colors.amber, size: 18),
+                    Text('\${(weather.current.tempC + index % 3).round()}°', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDailySection(WeatherData weather, bool isMetric) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('7-DAY FORECAST', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white70)),
+        const SizedBox(height: 8),
+        ...weather.daily.map((day) {
+          final high = isMetric ? '\${day.maxTempC.round()}°' : '\${day.maxTempF.round()}°';
+          final low = isMetric ? '\${day.minTempC.round()}°' : '\${day.minTempF.round()}°';
+          return Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.between,
+              children: [
+                SizedBox(width: 80, child: Text(day.date, style: const TextStyle(color: Colors.white, fontSize: 13))),
+                Text(day.conditionText, style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12)),
+                Text('\$high / \$low', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildMetricsGrid(WeatherData weather, bool isMetric) {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 10,
+      mainAxisSpacing: 10,
+      childAspectRatio: 2.2,
+      children: [
+        _buildMetricItem(Icons.air, 'WIND', isMetric ? '\${weather.current.windKph} km/h' : '\${weather.current.windMph} mph'),
+        _buildMetricItem(Icons.water_drop, 'HUMIDITY', '\${weather.current.humidity}%'),
+        _buildMetricItem(Icons.wb_sunny, 'UV INDEX', '\${weather.current.uvIndex}'),
+        _buildMetricItem(Icons.compress, 'PRESSURE', '\${weather.current.pressureMb} hPa'),
+      ],
+    );
+  }
+
+  Widget _buildMetricItem(IconData icon, String title, String value) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.cyanAccent, size: 20),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(title, style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.6), fontWeight: FontWeight.bold)),
+              Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1543,6 +1996,7 @@ export default function App() {
   const [selectedCity, setSelectedCity] = useState<string>('London');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isMetric, setIsMetric] = useState<boolean>(true);
+  const [isOffline, setIsOffline] = useState<boolean>(true);
   const [favorites, setFavorites] = useState<string[]>(['London', 'New York', 'Tokyo', 'Miami', 'Chicago']);
   const [activeFile, setActiveFile] = useState<string>('pubspec.yaml');
   const [copiedFile, setCopiedFile] = useState<boolean>(false);
@@ -1801,6 +2255,21 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
                         )}
                       </button>
                       <button
+                        onClick={() => setIsOffline(!isOffline)}
+                        className={`p-1.5 rounded-full backdrop-blur border text-xs font-semibold transition flex items-center gap-1 ${
+                          isOffline
+                            ? 'bg-amber-500/30 border-amber-400/60 text-amber-200 hover:bg-amber-500/40'
+                            : 'bg-emerald-500/20 border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/30'
+                        }`}
+                        title={isOffline ? 'Offline mode active (Click to go Online)' : 'Online mode (Click to simulate Offline mode)'}
+                      >
+                        {isOffline ? (
+                          <WifiOff className="w-3.5 h-3.5 text-amber-300" />
+                        ) : (
+                          <Wifi className="w-3.5 h-3.5 text-emerald-300" />
+                        )}
+                      </button>
+                      <button
                         onClick={() => setIsMetric(!isMetric)}
                         className="px-2 py-0.5 bg-white/10 backdrop-blur rounded-full text-xs font-semibold hover:bg-white/20 transition"
                       >
@@ -1820,7 +2289,7 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
                   </div>
 
                   {/* Search Bar */}
-                  <div className="px-4 mb-3 z-20">
+                  <div className="px-4 mb-2 z-20">
                     <div className="relative">
                       <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
                       <input
@@ -1853,6 +2322,33 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
                       </div>
                     )}
                   </div>
+
+                  {/* Dynamic Clear, Non-Intrusive Offline Mode Banner */}
+                  <AnimatePresence>
+                    {isOffline && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                        animate={{ opacity: 1, height: 'auto', marginBottom: 8 }}
+                        exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                        transition={{ duration: 0.25, ease: 'easeInOut' }}
+                        className="mx-4 overflow-hidden z-20"
+                      >
+                        <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 backdrop-blur text-amber-200 flex items-center justify-between gap-2 shadow-sm">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1 bg-amber-500/25 rounded-lg text-amber-300 flex-shrink-0">
+                              <WifiOff className="w-3.5 h-3.5" />
+                            </div>
+                            <span className="text-[11px] font-semibold text-amber-100 tracking-tight">
+                              Last updated 12 mins ago (offline)
+                            </span>
+                          </div>
+                          <span className="text-[9px] font-extrabold bg-amber-500/30 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/50 tracking-wider font-mono">
+                            OFFLINE
+                          </span>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   {/* Scrollable Mobile Body */}
                   <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-4 text-xs scrollbar-thin scrollbar-thumb-slate-700">
@@ -2348,6 +2844,21 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
                     className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-400 font-semibold rounded-lg border border-slate-700"
                   >
                     {isMetric ? 'Metric (°C, km/h)' : 'Imperial (°F, mph)'}
+                  </button>
+                </div>
+
+                <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-slate-400">Offline Simulation:</span>
+                  <button
+                    onClick={() => setIsOffline(!isOffline)}
+                    className={`px-3 py-1 font-semibold rounded-lg border transition flex items-center gap-1.5 ${
+                      isOffline
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                    }`}
+                  >
+                    {isOffline ? <WifiOff className="w-3.5 h-3.5" /> : <Wifi className="w-3.5 h-3.5" />}
+                    {isOffline ? 'Offline Mode (Active)' : 'Online Mode'}
                   </button>
                 </div>
               </div>
