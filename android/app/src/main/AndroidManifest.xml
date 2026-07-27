@@ -39,9 +39,7 @@
             android:windowSoftInputMode="adjustResize">
             
             <!-- REQUIRED FOR FLUTTER V2 EMBEDDING -->
-            <meta-data
-                android:name="flutterEmbedding"
-                android:value="2" />
+            <meta-data android:name="flutterEmbedding" android:value="2" />
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
