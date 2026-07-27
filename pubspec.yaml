@@ -21,14 +21,12 @@ dependencies:
   fl_chart: ^0.68.0
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
-  google_mobile_ads: ^9.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
   flutter_native_splash: ^2.4.0
-  flutter_launcher_icons: ^0.13.1
 
 flutter_native_splash:
   color: "#0D0D0D"
@@ -39,16 +37,9 @@ flutter_native_splash:
     image: assets/splash_icon.png
     icon_background_color: "#0D0D0D"
 
-flutter_launcher_icons:
-  android: true
-  ios: false
-  image_path: "assets/icon/app_icon.png"
-  min_sdk_android: 21
-
 flutter:
   uses-material-design: true
   assets:
     - .env
     - assets/splash_icon.png
     - assets/app_logo.png
-    - assets/icon/app_icon.png

@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
 import '../models/weather_model.dart';
 import '../providers/weather_provider.dart';
-import '../services/ad_service.dart';
 import '../widgets/weather_background.dart';
 import '../widgets/current_weather_card.dart';
 import '../widgets/hourly_forecast_list.dart';
@@ -24,23 +22,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   ChartType _selectedChartType = ChartType.temperature;
-
-  @override
-  void initState() {
-    super.initState();
-    // Load the banner once per screen visit - AdService itself prevents
-    // duplicate loads/reload loops.
-    AdService().loadBannerAd(onLoaded: () {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    // Banner belongs to this screen only - dispose it when leaving Home.
-    AdService().disposeBannerAd();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -132,34 +113,15 @@ class _HomeScreenState extends State<HomeScreen> {
         conditionText: provider.currentWeather?.current.conditionText ?? 'Clear',
         isDay: provider.currentWeather?.current.isDay ?? true,
         child: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () async {
-                    if (provider.currentWeather != null) {
-                      await provider.loadWeatherForCity(provider.currentWeather!.location.name);
-                    } else {
-                      await provider.init();
-                    }
-                    // Count this manual refresh - AdService decides internally
-                    // whether it's time to show an (occasional) interstitial.
-                    AdService().recordUserAction();
-                  },
-                  child: _buildBody(provider),
-                ),
-              ),
-              // Banner ad dock - sits in its own dedicated space below all
-              // weather content, never overlapping data or buttons.
-              if (AdService().isBannerReady)
-                Container(
-                  width: double.infinity,
-                  color: Colors.black.withOpacity(0.35),
-                  alignment: Alignment.center,
-                  height: AdService().bannerAd!.size.height.toDouble(),
-                  child: AdWidget(ad: AdService().bannerAd!),
-                ),
-            ],
+          child: RefreshIndicator(
+            onRefresh: () async {
+              if (provider.currentWeather != null) {
+                await provider.loadWeatherForCity(provider.currentWeather!.location.name);
+              } else {
+                await provider.init();
+              }
+            },
+            child: _buildBody(provider),
           ),
         ),
       ),
@@ -320,7 +282,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: Colors.white70,
+                          color: Colors.white90,
                           fontSize: 12,
                         ),
                       ),

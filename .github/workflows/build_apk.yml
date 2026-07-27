@@ -30,37 +30,17 @@ jobs:
       - name: Inject .env File from GitHub Secrets
         run: |
           echo "WEATHER_API_KEY=${{ secrets.WEATHER_API_KEY }}" > .env
-          echo "AI_API_KEY=${{ secrets.AI_API_KEY }}" >> .env
-          echo "ADMOB_APP_ID=${{ secrets.ADMOB_APP_ID }}" >> .env
-          echo "ADMOB_BANNER_UNIT_ID=${{ secrets.ADMOB_BANNER_UNIT_ID }}" >> .env
-          echo "ADMOB_INTERSTITIAL_UNIT_ID=${{ secrets.ADMOB_INTERSTITIAL_UNIT_ID }}" >> .env
-          echo "Created .env configuration with GitHub Secrets."
-
-      - name: Inject AdMob App ID into AndroidManifest.xml
-        run: |
-          ADMOB_ID="${{ secrets.ADMOB_APP_ID }}"
-          if [ -z "$ADMOB_ID" ]; then
-            ADMOB_ID="ca-app-pub-3940256099942544~3347511713"
-          fi
-          sed -i "s/ADMOB_APP_ID_PLACEHOLDER/$ADMOB_ID/g" android/app/src/main/AndroidManifest.xml || true
-          echo "Successfully injected AdMob App ID into AndroidManifest.xml"
+          echo "Created .env configuration file."
 
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Ensure Flutter v2 Embedding in AndroidManifest.xml
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            if ! grep -q "flutterEmbedding" "$MANIFEST"; then
-              echo "Injecting Android v2 embedding metadata into AndroidManifest.xml..."
-              sed -i '/<activity/a \            <meta-data android:name="flutterEmbedding" android:value="2" \/>' "$MANIFEST"
-            fi
-          fi
+      - name: Generate Native Splash Screen
+        run: flutter pub run flutter_native_splash:create
 
       - name: Build Release APK
         run: flutter build apk --release
-        
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -72,10 +52,12 @@ jobs:
         if: github.ref == 'refs/heads/main'
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: Atmosphere Weather APK Release v1.0.${{ github.run_number }}
+          name: Release v1.0.${{ github.run_number }}
           body: |
             ## Atmosphere Weather Android APK Release
-            - Built with google_mobile_ads ^9.0.0 & Flutter Stable SDK
+            - Automated GitHub Actions build for run #${{ github.run_number }}
+            - Built with Flutter Stable SDK & Java 17
+            - Null-safety enabled & release optimized
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

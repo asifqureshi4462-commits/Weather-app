@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../providers/weather_provider.dart';
-import '../services/ad_service.dart';
 
 class RadarFrame {
   final int time;
@@ -36,9 +35,6 @@ class _RadarScreenState extends State<RadarScreen> {
   void initState() {
     super.initState();
     _fetchRadarData();
-    // Count "opened radar screen" as one countable action toward the
-    // occasional interstitial (every 3rd countable action, per AdService).
-    AdService().recordUserAction();
   }
 
   @override
@@ -107,12 +103,6 @@ class _RadarScreenState extends State<RadarScreen> {
     }
   }
 
-  void _manualRefresh() {
-    _fetchRadarData();
-    // Manual refresh is also a countable action toward the interstitial.
-    AdService().recordUserAction();
-  }
-
   void _togglePlayback() {
     if (_isPlaying) {
       _animationTimer?.cancel();
@@ -155,13 +145,10 @@ class _RadarScreenState extends State<RadarScreen> {
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Refresh Radar',
-            onPressed: _manualRefresh,
+            onPressed: _fetchRadarData,
           ),
         ],
       ),
-      // No ads on this screen's map surface - a map needs full, uninterrupted
-      // space. The only monetization here is the occasional interstitial
-      // triggered by recordUserAction() above, never a banner overlay.
       body: Stack(
         children: [
           // FlutterMap
@@ -181,19 +168,11 @@ class _RadarScreenState extends State<RadarScreen> {
               ),
 
               // RainViewer Live Overlay Tile Layer
-              // maxNativeZoom limits actual tile requests to zoom 10 (the
-              // highest RainViewer's free tile server supports) - beyond
-              // that, flutter_map scales up the zoom-10 tiles instead of
-              // requesting an unsupported zoom (which previously showed a
-              // "Zoom Level Not Supported" placeholder tile).
               if (_frames.isNotEmpty && _currentFrameIndex < _frames.length)
-                Opacity(
+                TileLayer(
+                  urlTemplate: '$_host${_frames[_currentFrameIndex].path}/256/{z}/{x}/{y}/2/1_1.png',
+                  tileProvider: NetworkTileProvider(),
                   opacity: 0.65,
-                  child: TileLayer(
-                    urlTemplate: '$_host${_frames[_currentFrameIndex].path}/256/{z}/{x}/{y}/2/1_1.png',
-                    tileProvider: NetworkTileProvider(),
-                    maxNativeZoom: 10,
-                  ),
                 ),
 
               // Current Location Marker Pin

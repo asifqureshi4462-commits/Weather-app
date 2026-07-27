@@ -159,11 +159,36 @@ jobs:
           if [ -z "\$ADMOB_ID" ]; then
             ADMOB_ID="ca-app-pub-3940256099942544~3347511713"
           fi
-          sed -i "s/ADMOB_APP_ID_PLACEHOLDER/\$ADMOB_ID/g" android/app/src/main/AndroidManifest.xml
+          sed -i "s/ADMOB_APP_ID_PLACEHOLDER/\$ADMOB_ID/g" android/app/src/main/AndroidManifest.xml || true
           echo "Successfully injected AdMob App ID into AndroidManifest.xml"
 
       - name: Install Dependencies
         run: flutter pub get
+
+      - name: FIX - Patch google_mobile_ads build.gradle for Gradle Compatibility
+        run: |
+          echo "=== Patching google_mobile_ads build.gradle if needed ==="
+          GRADLE_FILES=$(find "$HOME/.pub-cache/hosted/pub.dev" -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) | grep "google_mobile_ads" || true)
+          if [ -n "$GRADLE_FILES" ]; then
+            for FILE in $GRADLE_FILES; do
+              echo "Processing $FILE..."
+              sed -i 's/for\s*(configuration\s*in\s*configurations)/for (configuration in configurations.matching { it.name != "archives" })/g' "$FILE" 2>/dev/null || true
+              sed -i 's/configurations\.all\s*\{/configurations.configureEach {/g' "$FILE" 2>/dev/null || true
+              echo "Safely processed $FILE"
+            done
+          else
+            echo "No google_mobile_ads gradle file required patching."
+          fi
+
+      - name: Ensure Flutter v2 Embedding in AndroidManifest.xml
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            if ! grep -q "flutterEmbedding" "$MANIFEST"; then
+              echo "Injecting Android v2 embedding metadata into AndroidManifest.xml..."
+              sed -i '/<activity/a \            <meta-data android:name="flutterEmbedding" android:value="2" \/>' "$MANIFEST"
+            fi
+          fi
 
       - name: Build Release APK
         run: flutter build apk --release
@@ -227,6 +252,12 @@ jobs:
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
+            
+            <!-- Flutter v2 Embedding requirement -->
+            <meta-data
+                android:name="flutterEmbedding"
+                android:value="2" />
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
@@ -234,6 +265,13 @@ jobs:
         </activity>
     </application>
 </manifest>`,
+
+  'android/app/src/main/java/com/example/atmosphere_weather/MainActivity.kt': `package com.example.atmosphere_weather
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity: FlutterActivity() {
+}`,
 
   'lib/services/widget_service.dart': `import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
