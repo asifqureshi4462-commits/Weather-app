@@ -72,6 +72,14 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
+      - name: DEBUG - Print google_mobile_ads build.gradle content
+        run: |
+          echo "===== Locating google_mobile_ads build.gradle ====="
+          find / -path "*google_mobile_ads*/android/build.gradle" 2>/dev/null
+          echo "===== Full content ====="
+          find / -path "*google_mobile_ads*/android/build.gradle" 2>/dev/null -exec cat {} \;
+          echo "===== End content ====="
+
       - name: Generate Native Splash Screen
         run: flutter pub run flutter_native_splash:create
 
