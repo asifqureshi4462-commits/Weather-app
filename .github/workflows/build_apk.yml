@@ -67,7 +67,35 @@ jobs:
           printf 'package com.example.atmosphere_weather\n\nimport io.flutter.embedding.android.FlutterActivity\n\nclass MainActivity: FlutterActivity() {\n}\n' > "$MAIN_KT_DIR/MainActivity.kt"
           find android/ -name "MainActivity.java" -delete 2>/dev/null || true
 
-          echo "Flutter Android v2 embedding setup generated."
+          if [ -f "android/app/build.gradle" ]; then
+            echo "Enabling core library desugaring in android/app/build.gradle..."
+            if ! grep -q "coreLibraryDesugaringEnabled" android/app/build.gradle; then
+              sed -i 's/compileOptions {/compileOptions {\n        coreLibraryDesugaringEnabled true/' android/app/build.gradle
+            fi
+            if ! grep -q "desugar_jdk_libs" android/app/build.gradle; then
+              if grep -q "dependencies {" android/app/build.gradle; then
+                sed -i 's/dependencies {/dependencies {\n    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"/' android/app/build.gradle
+              else
+                printf '\ndependencies {\n    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"\n}\n' >> android/app/build.gradle
+              fi
+            fi
+          fi
+
+          if [ -f "android/app/build.gradle.kts" ]; then
+            echo "Enabling core library desugaring in android/app/build.gradle.kts..."
+            if ! grep -q "isCoreLibraryDesugaringEnabled" android/app/build.gradle.kts; then
+              sed -i 's/compileOptions {/compileOptions {\n        isCoreLibraryDesugaringEnabled = true/' android/app/build.gradle.kts
+            fi
+            if ! grep -q "desugar_jdk_libs" android/app/build.gradle.kts; then
+              if grep -q "dependencies {" android/app/build.gradle.kts; then
+                sed -i 's/dependencies {/dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")/' android/app/build.gradle.kts
+              else
+                printf '\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")\n}\n' >> android/app/build.gradle.kts
+              fi
+            fi
+          fi
+
+          echo "Flutter Android v2 embedding & desugaring setup generated."
 
       - name: Install Dependencies
         run: flutter pub get
