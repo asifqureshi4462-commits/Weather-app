@@ -1,159 +1,409 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
+import '../providers/weather_provider.dart';
+import '../services/ad_service.dart';
 
-/// Centralized AdMob ad management.
-/// - Loads a banner once per screen visit (no auto-reload loops).
-/// - Shows an interstitial only after [_actionsBeforeInterstitial]
-///   user-triggered actions (never on app launch/splash).
-/// - Never throws - every ad call is wrapped so the app can't crash
-///   if AdMob fails to initialize (e.g. no internet).
-class AdService {
-  static final AdService _instance = AdService._internal();
-  factory AdService() => _instance;
-  AdService._internal();
+class RadarFrame {
+  final int time;
+  final String path;
+  RadarFrame({required this.time, required this.path});
+}
 
-  bool _isInitialized = false;
+class RadarScreen extends StatefulWidget {
+  const RadarScreen({super.key});
 
-  BannerAd? _bannerAd;
-  bool _isBannerLoaded = false;
+  @override
+  State<RadarScreen> createState() => _RadarScreenState();
+}
 
-  InterstitialAd? _interstitialAd;
-  bool _isInterstitialLoaded = false;
+class _RadarScreenState extends State<RadarScreen> {
+  final MapController _mapController = MapController();
+  List<RadarFrame> _frames = [];
+  String _host = 'https://tilecache.rainviewer.com';
+  int _currentFrameIndex = 0;
+  bool _isLoadingRadar = true;
+  bool _isPlaying = false;
+  Timer? _animationTimer;
+  String? _errorMessage;
 
-  int _actionCounter = 0;
-  static const int _actionsBeforeInterstitial = 3;
-
-  String get _bannerUnitId => dotenv.env['ADMOB_BANNER_UNIT_ID'] ?? '';
-  String get _interstitialUnitId => dotenv.env['ADMOB_INTERSTITIAL_UNIT_ID'] ?? '';
-
-  /// Call once, early in main() after dotenv is loaded.
-  Future<void> initialize() async {
-    if (_isInitialized) return;
-    try {
-      await MobileAds.instance.initialize();
-      _isInitialized = true;
-      _loadInterstitialAd();
-    } catch (e) {
-      debugPrint('AdMob initialization failed (ads disabled this session): $e');
-      _isInitialized = false;
-    }
+  @override
+  void initState() {
+    super.initState();
+    _fetchRadarData();
+    // Count "opened radar screen" as one countable action toward the
+    // occasional interstitial (every 3rd countable action, per AdService).
+    AdService().recordUserAction();
   }
 
-  // ---------------- Banner Ad ----------------
-
-  BannerAd? get bannerAd => _isBannerLoaded ? _bannerAd : null;
-  bool get isBannerReady => _isBannerLoaded && _bannerAd != null;
-
-  /// Loads a banner ad once. Safe to call multiple times - it will not
-  /// reload if a banner is already loaded or in-flight for this session.
-  Future<void> loadBannerAd({required VoidCallback onLoaded}) async {
-    if (!_isInitialized || _bannerUnitId.isEmpty) return;
-    if (_bannerAd != null) return; // already loaded/loading
-
-    try {
-      final banner = BannerAd(
-        adUnitId: _bannerUnitId,
-        size: AdSize.banner,
-        request: const AdRequest(),
-        listener: BannerAdListener(
-          onAdLoaded: (ad) {
-            _isBannerLoaded = true;
-            onLoaded();
-          },
-          onAdFailedToLoad: (ad, error) {
-            debugPrint('Banner ad failed to load: $error');
-            _isBannerLoaded = false;
-            ad.dispose();
-            _bannerAd = null;
-          },
-        ),
-      );
-      _bannerAd = banner;
-      await banner.load();
-    } catch (e) {
-      debugPrint('Banner ad load exception: $e');
-      _isBannerLoaded = false;
-      _bannerAd = null;
-    }
+  @override
+  void dispose() {
+    _animationTimer?.cancel();
+    super.dispose();
   }
 
-  void disposeBannerAd() {
+  Future<void> _fetchRadarData() async {
+    setState(() {
+      _isLoadingRadar = true;
+      _errorMessage = null;
+    });
+
     try {
-      _bannerAd?.dispose();
-    } catch (_) {}
-    _bannerAd = null;
-    _isBannerLoaded = false;
-  }
+      final response = await http
+          .get(Uri.parse('https://api.rainviewer.com/public/weather-maps.json'))
+          .timeout(const Duration(seconds: 10));
 
-  // ---------------- Interstitial Ad ----------------
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        _host = data['host'] ?? 'https://tilecache.rainviewer.com';
 
-  void _loadInterstitialAd() {
-    if (!_isInitialized || _interstitialUnitId.isEmpty) return;
-    try {
-      InterstitialAd.load(
-        adUnitId: _interstitialUnitId,
-        request: const AdRequest(),
-        adLoadCallback: InterstitialAdLoadCallback(
-          onAdLoaded: (ad) {
-            _interstitialAd = ad;
-            _isInterstitialLoaded = true;
-            _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
-              onAdDismissedFullScreenContent: (ad) {
-                ad.dispose();
-                _interstitialAd = null;
-                _isInterstitialLoaded = false;
-                _loadInterstitialAd(); // preload the next one for later
-              },
-              onAdFailedToShowFullScreenContent: (ad, error) {
-                debugPrint('Interstitial failed to show: $error');
-                ad.dispose();
-                _interstitialAd = null;
-                _isInterstitialLoaded = false;
-              },
-            );
-          },
-          onAdFailedToLoad: (error) {
-            debugPrint('Interstitial ad failed to load: $error');
-            _isInterstitialLoaded = false;
-            _interstitialAd = null;
-          },
-        ),
-      );
-    } catch (e) {
-      debugPrint('Interstitial load exception: $e');
-    }
-  }
+        final List<RadarFrame> parsedFrames = [];
+        final past = data['radar']?['past'] as List<dynamic>?;
+        if (past != null) {
+          for (var item in past) {
+            if (item['time'] != null && item['path'] != null) {
+              parsedFrames.add(RadarFrame(
+                time: (item['time'] as num).toInt(),
+                path: item['path'].toString(),
+              ));
+            }
+          }
+        }
 
-  /// Call this whenever the user performs a "countable" action:
-  /// a manual weather refresh, or opening the radar screen.
-  /// Shows an interstitial only every [_actionsBeforeInterstitial] actions.
-  /// NEVER call this from splash screen, app init, or during data loading.
-  void recordUserAction() {
-    if (!_isInitialized) return;
-    _actionCounter++;
-    if (_actionCounter >= _actionsBeforeInterstitial) {
-      _actionCounter = 0;
-      _maybeShowInterstitial();
-    }
-  }
+        final nowcast = data['radar']?['nowcast'] as List<dynamic>?;
+        if (nowcast != null) {
+          for (var item in nowcast) {
+            if (item['time'] != null && item['path'] != null) {
+              parsedFrames.add(RadarFrame(
+                time: (item['time'] as num).toInt(),
+                path: item['path'].toString(),
+              ));
+            }
+          }
+        }
 
-  void _maybeShowInterstitial() {
-    try {
-      if (_isInterstitialLoaded && _interstitialAd != null) {
-        _interstitialAd!.show();
+        if (mounted) {
+          setState(() {
+            _frames = parsedFrames;
+            _currentFrameIndex = parsedFrames.isNotEmpty ? parsedFrames.length - 1 : 0;
+            _isLoadingRadar = false;
+          });
+        }
+      } else {
+        throw Exception('Failed to load radar server metadata (${response.statusCode})');
       }
     } catch (e) {
-      debugPrint('Interstitial show exception: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Radar unavailable. Check internet connection.';
+          _isLoadingRadar = false;
+        });
+      }
     }
   }
 
-  void dispose() {
-    disposeBannerAd();
-    try {
-      _interstitialAd?.dispose();
-    } catch (_) {}
-    _interstitialAd = null;
-    _isInterstitialLoaded = false;
+  void _manualRefresh() {
+    _fetchRadarData();
+    // Manual refresh is also a countable action toward the interstitial.
+    AdService().recordUserAction();
+  }
+
+  void _togglePlayback() {
+    if (_isPlaying) {
+      _animationTimer?.cancel();
+      setState(() => _isPlaying = false);
+    } else {
+      if (_frames.isEmpty) return;
+      setState(() => _isPlaying = true);
+      _animationTimer = Timer.periodic(const Duration(milliseconds: 900), (timer) {
+        if (!mounted) return;
+        setState(() {
+          _currentFrameIndex = (_currentFrameIndex + 1) % _frames.length;
+        });
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final weatherProvider = Provider.of<WeatherProvider>(context);
+    final weather = weatherProvider.currentWeather;
+
+    final LatLng centerPos = weather != null
+        ? LatLng(weather.location.lat, weather.location.lon)
+        : const LatLng(51.5074, -0.1278); // Default London
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          weather != null ? 'Live Radar • ${weather.location.name}' : 'Live Weather Radar',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.my_location_rounded),
+            tooltip: 'Center Location',
+            onPressed: () {
+              _mapController.move(centerPos, 8.5);
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Refresh Radar',
+            onPressed: _manualRefresh,
+          ),
+        ],
+      ),
+      // No ads on this screen's map surface - a map needs full, uninterrupted
+      // space. The only monetization here is the occasional interstitial
+      // triggered by recordUserAction() above, never a banner overlay.
+      body: Stack(
+        children: [
+          // FlutterMap
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: centerPos,
+              initialZoom: 8.5,
+              minZoom: 3.0,
+              maxZoom: 15.0,
+            ),
+            children: [
+              // OpenStreetMap Base Tiles
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.atmosphere_weather',
+              ),
+
+              // RainViewer Live Overlay Tile Layer
+              // maxNativeZoom limits actual tile requests to zoom 10 (the
+              // highest RainViewer's free tile server supports) - beyond
+              // that, flutter_map scales up the zoom-10 tiles instead of
+              // requesting an unsupported zoom (which previously showed a
+              // "Zoom Level Not Supported" placeholder tile).
+              if (_frames.isNotEmpty && _currentFrameIndex < _frames.length)
+                Opacity(
+                  opacity: 0.65,
+                  child: TileLayer(
+                    urlTemplate: '$_host${_frames[_currentFrameIndex].path}/256/{z}/{x}/{y}/2/1_1.png',
+                    tileProvider: NetworkTileProvider(),
+                    maxNativeZoom: 10,
+                  ),
+                ),
+
+              // Current Location Marker Pin
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: centerPos,
+                    width: 44,
+                    height: 44,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.blueAccent.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.blueAccent, width: 2),
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.location_on_rounded,
+                          color: Colors.redAccent,
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // Loading overlay indicator
+          if (_isLoadingRadar)
+            Positioned(
+              top: 16,
+              left: 16,
+              right: 16,
+              child: Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        'Fetching live precipitation radar frames...',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          if (_errorMessage != null)
+            Positioned(
+              top: 16,
+              left: 16,
+              right: 16,
+              child: Card(
+                color: Colors.red.shade900,
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline_rounded, color: Colors.white),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _fetchRadarData,
+                        child: const Text('RETRY', style: TextStyle(color: Colors.white)),
+                      )
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // Bottom Radar Scrubbing & Legend Control Dock
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 24,
+            child: Card(
+              elevation: 8,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Timestamp & Playback Toggle Row
+                    Row(
+                      children: [
+                        FloatingActionButton.small(
+                          heroTag: 'radar_play',
+                          onPressed: _togglePlayback,
+                          child: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _frames.isNotEmpty
+                                  ? DateFormat('E, MMM d • hh:mm a').format(
+                                      DateTime.fromMillisecondsSinceEpoch(
+                                          _frames[_currentFrameIndex].time * 1000))
+                                  : 'Live Radar Timestamp',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const Text(
+                              'Rain & Precipitation Overlay',
+                              style: TextStyle(fontSize: 11, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${_currentFrameIndex + 1}/${_frames.isNotEmpty ? _frames.length : 1}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Slider Scrubbing
+                    if (_frames.length > 1) ...[
+                      const SizedBox(height: 8),
+                      Slider(
+                        value: _currentFrameIndex.toDouble(),
+                        min: 0,
+                        max: (_frames.length - 1).toDouble(),
+                        divisions: _frames.length - 1,
+                        onChanged: (val) {
+                          if (_isPlaying) _togglePlayback();
+                          setState(() {
+                            _currentFrameIndex = val.toInt();
+                          });
+                        },
+                      ),
+                    ],
+
+                    const SizedBox(height: 8),
+
+                    // Radar Intensity Legend
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Light',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                        Expanded(
+                          child: Container(
+                            height: 6,
+                            margin: const EdgeInsets.symmetric(horizontal: 8),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(3),
+                              gradient: const LinearGradient(
+                                colors: [
+                                  Colors.cyanAccent,
+                                  Colors.blue,
+                                  Colors.green,
+                                  Colors.yellow,
+                                  Colors.amber,
+                                  Colors.red,
+                                  Colors.purple,
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const Text(
+                          'Heavy',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
