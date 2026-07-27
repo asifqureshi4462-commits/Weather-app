@@ -2,13 +2,11 @@ name: Build & Release Flutter Android APK
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build Release APK
     runs-on: ubuntu-latest
 
     steps:
@@ -18,32 +16,27 @@ jobs:
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: 'zulu'
           java-version: '17'
 
       - name: Setup Flutter SDK
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.24.0'
           channel: 'stable'
           cache: true
 
       - name: Inject .env File from GitHub Secrets
         run: |
           echo "WEATHER_API_KEY=${{ secrets.WEATHER_API_KEY }}" > .env
-          echo "AI_API_KEY=${{ secrets.AI_API_KEY }}" >> .env
-          echo "ADMOB_APP_ID=${{ secrets.ADMOB_APP_ID }}" >> .env
-          echo "ADMOB_BANNER_UNIT_ID=${{ secrets.ADMOB_BANNER_UNIT_ID }}" >> .env
-          echo "ADMOB_INTERSTITIAL_UNIT_ID=${{ secrets.ADMOB_INTERSTITIAL_UNIT_ID }}" >> .env
-          echo "Created .env configuration with GitHub Secrets."
+          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
 
       - name: Inject AdMob App ID into AndroidManifest.xml
         run: |
-          ADMOB_ID="${{ secrets.ADMOB_APP_ID }}"
-          if [ -z "$ADMOB_ID" ]; then
-            ADMOB_ID="ca-app-pub-3940256099942544~3347511713"
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            sed -i "s/ADMOB_APP_ID_PLACEHOLDER/${{ secrets.ADMOB_APP_ID }}/g" "$MANIFEST"
           fi
-          sed -i "s/ADMOB_APP_ID_PLACEHOLDER/$ADMOB_ID/g" android/app/src/main/AndroidManifest.xml || true
-          echo "Successfully injected AdMob App ID into AndroidManifest.xml"
 
       - name: Install Dependencies
         run: flutter pub get
@@ -54,24 +47,43 @@ jobs:
           GRADLE_FILES=$(find "$HOME/.pub-cache/hosted/pub.dev" -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) | grep "google_mobile_ads" || true)
           if [ -n "$GRADLE_FILES" ]; then
             for FILE in $GRADLE_FILES; do
-              echo "Processing $FILE..."
               sed -i 's/for\s*(configuration\s*in\s*configurations)/for (configuration in configurations.matching { it.name != "archives" })/g' "$FILE" 2>/dev/null || true
               sed -i 's/configurations\.all\s*\{/configurations.configureEach {/g' "$FILE" 2>/dev/null || true
-              echo "Safely processed $FILE"
             done
-          else
-            echo "No google_mobile_ads gradle file required patching."
           fi
 
-      - name: Ensure Flutter v2 Embedding in AndroidManifest.xml
+      - name: Ensure Flutter v2 Embedding (MainActivity & AndroidManifest)
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
-            echo "Enforcing Flutter v2 embedding placement in AndroidManifest.xml..."
             sed -i '/flutterEmbedding/d' "$MANIFEST" || true
             sed -i '/<application/a \        <meta-data android:name="flutterEmbedding" android:value="2" \/>' "$MANIFEST"
-            echo "Flutter v2 embedding tag successfully set inside <application> tag."
           fi
+
+          # Delete legacy v1 MainActivity.java if present
+          find android/app/src/main -name "MainActivity.java" -delete 2>/dev/null || true
+
+          MAIN_KT_DIR="android/app/src/main/kotlin/com/example/atmosphere_weather"
+          MAIN_JAVA_DIR="android/app/src/main/java/com/example/atmosphere_weather"
+          mkdir -p "$MAIN_KT_DIR" "$MAIN_JAVA_DIR"
+
+          cat << 'EOF' > "$MAIN_KT_DIR/MainActivity.kt"
+package com.example.atmosphere_weather
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity: FlutterActivity() {
+}
+EOF
+
+          cat << 'EOF' > "$MAIN_JAVA_DIR/MainActivity.kt"
+package com.example.atmosphere_weather
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity: FlutterActivity() {
+}
+EOF
 
       - name: Build Release APK
         run: flutter build apk --release
