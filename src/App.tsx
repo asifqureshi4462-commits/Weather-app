@@ -67,6 +67,9 @@ dependencies:
   http: ^1.2.1
   provider: ^6.1.2
   shared_preferences: ^2.2.3
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  sqflite: ^2.3.3
   geolocator: ^11.0.0
   permission_handler: ^11.3.1
   flutter_dotenv: ^5.1.0
@@ -803,7 +806,7 @@ class WeatherService {
 
   String get _apiKey => dotenv.env['WEATHER_API_KEY'] ?? '';
 
-  Future<WeatherData> fetchWeather(String query) async {
+  Future<Map<String, dynamic>> fetchRawWeatherJson(String query) async {
     final key = _apiKey;
     if (key.isEmpty) {
       throw Exception('API Key is missing. Please set WEATHER_API_KEY in .env or GitHub Secrets.');
@@ -815,7 +818,7 @@ class WeatherService {
       final response = await http.get(url).timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
-        return WeatherData.fromJson(json.decode(response.body));
+        return json.decode(response.body) as Map<String, dynamic>;
       } else if (response.statusCode == 400 || response.statusCode == 404) {
         throw Exception('Location not found.');
       } else {
@@ -826,6 +829,169 @@ class WeatherService {
     } catch (e) {
       throw Exception('Error loading weather: \$e');
     }
+  }
+
+  Future<WeatherData> fetchWeather(String query) async {
+    final rawMap = await fetchRawWeatherJson(query);
+    return WeatherData.fromJson(rawMap);
+  }
+}`,
+
+  'lib/providers/weather_provider.dart': `import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/weather_model.dart';
+import '../services/weather_service.dart';
+import '../services/ai_insight_service.dart';
+import '../services/widget_service.dart';
+
+class WeatherProvider with ChangeNotifier {
+  final WeatherService _weatherService = WeatherService();
+  final AiInsightService _aiInsightService = AiInsightService();
+
+  WeatherData? _weatherData;
+  bool _isLoading = false;
+  bool _isOffline = false;
+  String? _errorMessage;
+  String _aiVibe = '';
+  DateTime? _lastFetchTime;
+  String _currentCity = 'London';
+  bool _isMetric = true;
+  String _selectedLanguage = 'English';
+
+  static const String _cachedWeatherKeyPrefix = 'cached_weather_';
+  static const String _lastCityKey = 'last_selected_city';
+  static const String _lastFetchTimeKey = 'last_fetch_time';
+
+  WeatherData? get weatherData => _weatherData;
+  bool get isLoading => _isLoading;
+  bool get isOffline => _isOffline;
+  String? get errorMessage => _errorMessage;
+  String get aiVibe => _aiVibe;
+  DateTime? get lastFetchTime => _lastFetchTime;
+  String get currentCity => _currentCity;
+  bool get isMetric => _isMetric;
+  String get selectedLanguage => _selectedLanguage;
+
+  Future<void> initializeSettingsAndLoad() async {
+    final prefs = await SharedPreferences.getInstance();
+    _currentCity = prefs.getString(_lastCityKey) ?? 'London';
+    _isMetric = prefs.getBool('is_metric') ?? true;
+    _selectedLanguage = prefs.getString('language') ?? 'English';
+
+    // 1. Immediately attempt to load cached weather from disk storage (Offline First)
+    await _loadFromPersistentCache(_currentCity);
+
+    // 2. Fetch fresh weather data from WeatherAPI
+    await fetchWeather(_currentCity);
+  }
+
+  Future<void> setUnitPreference(bool metric) async {
+    _isMetric = metric;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_metric', metric);
+    if (_weatherData != null) {
+      WidgetService.updateHomeWidget(_weatherData!, isMetric: _isMetric);
+    }
+    notifyListeners();
+  }
+
+  Future<void> setLanguage(String lang) async {
+    _selectedLanguage = lang;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('language', lang);
+    if (_weatherData != null) {
+      _generateAiVibe();
+    }
+    notifyListeners();
+  }
+
+  Future<void> fetchWeather(String cityName) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final rawJsonMap = await _weatherService.fetchRawWeatherJson(cityName);
+      _weatherData = WeatherData.fromJson(rawJsonMap);
+      _currentCity = _weatherData!.location.name;
+      _isOffline = false;
+      _lastFetchTime = DateTime.now();
+
+      // Persist latest weather JSON to local disk storage
+      await _saveToPersistentCache(_currentCity, rawJsonMap);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_lastCityKey, _currentCity);
+      await prefs.setString(_lastFetchTimeKey, _lastFetchTime!.toIso8601String());
+
+      // Sync Android Home Widget
+      WidgetService.updateHomeWidget(_weatherData!, isMetric: _isMetric);
+
+      // Generate AI Vibe summary
+      _generateAiVibe();
+    } catch (e) {
+      debugPrint('Network error or offline: \$e. Falling back to persistent disk cache...');
+      final cacheLoaded = await _loadFromPersistentCache(cityName);
+      if (cacheLoaded) {
+        _isOffline = true;
+        _errorMessage = null;
+      } else {
+        _isOffline = true;
+        _errorMessage = 'No internet connection and no cached weather data found.';
+      }
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _saveToPersistentCache(String city, Map<String, dynamic> jsonMap) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cacheKey = '\$_cachedWeatherKeyPrefix\${city.toLowerCase().trim()}';
+      final jsonString = jsonEncode(jsonMap);
+      await prefs.setString(cacheKey, jsonString);
+      await prefs.setString('last_cached_weather_json', jsonString);
+      debugPrint('Successfully saved weather data to persistent cache for \$city');
+    } catch (e) {
+      debugPrint('Failed to write weather cache: \$e');
+    }
+  }
+
+  Future<bool> _loadFromPersistentCache(String city) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cacheKey = '\$_cachedWeatherKeyPrefix\${city.toLowerCase().trim()}';
+      String? cachedJson = prefs.getString(cacheKey);
+
+      // Fallback to most recent cached weather if specific city isn't found
+      cachedJson ??= prefs.getString('last_cached_weather_json');
+
+      if (cachedJson != null && cachedJson.isNotEmpty) {
+        final decodedMap = jsonDecode(cachedJson) as Map<String, dynamic>;
+        _weatherData = WeatherData.fromJson(decodedMap);
+        _isOffline = true;
+
+        final savedTimeStr = prefs.getString(_lastFetchTimeKey);
+        if (savedTimeStr != null) {
+          _lastFetchTime = DateTime.tryParse(savedTimeStr);
+        }
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Failed to read weather cache: \$e');
+    }
+    return false;
+  }
+
+  Future<void> _generateAiVibe() async {
+    if (_weatherData == null) return;
+    try {
+      _aiVibe = await _aiInsightService.generateDailyVibe(_weatherData!, _selectedLanguage);
+      notifyListeners();
+    } catch (_) {}
   }
 }`,
 

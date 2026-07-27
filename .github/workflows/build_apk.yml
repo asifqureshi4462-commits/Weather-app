@@ -35,18 +35,9 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Ensure Flutter v2 Embedding in AndroidManifest.xml
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            if ! grep -q "flutterEmbedding" "$MANIFEST"; then
-              echo "Injecting Android v2 embedding metadata into AndroidManifest.xml..."
-              sed -i '/<activity/a \            <meta-data android:name="flutterEmbedding" android:value="2" \/>' "$MANIFEST"
-            fi
-          fi
+      - name: Generate Native Splash Screen
+        run: flutter pub run flutter_native_splash:create
 
-      - name: Build Release APK
-        run: flutter build apk --release
       - name: Build Release APK
         run: flutter build apk --release
 
