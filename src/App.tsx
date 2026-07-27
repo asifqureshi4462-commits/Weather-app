@@ -561,7 +561,7 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
               const Padding(
                 padding: EdgeInsets.bottom(24.0),
-                child: Text('Developed by Asif Qureshi', style: TextStyle(color: Colors.white90, fontWeight: FontWeight.bold)),
+                child: Text('Developed by Asif Qureshi', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
               ),
             ],
           ),

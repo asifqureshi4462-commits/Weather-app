@@ -169,10 +169,12 @@ class _RadarScreenState extends State<RadarScreen> {
 
               // RainViewer Live Overlay Tile Layer
               if (_frames.isNotEmpty && _currentFrameIndex < _frames.length)
-                TileLayer(
-                  urlTemplate: '$_host${_frames[_currentFrameIndex].path}/256/{z}/{x}/{y}/2/1_1.png',
-                  tileProvider: NetworkTileProvider(),
+                Opacity(
                   opacity: 0.65,
+                  child: TileLayer(
+                    urlTemplate: '$_host${_frames[_currentFrameIndex].path}/256/{z}/{x}/{y}/2/1_1.png',
+                    tileProvider: NetworkTileProvider(),
+                  ),
                 ),
 
               // Current Location Marker Pin
