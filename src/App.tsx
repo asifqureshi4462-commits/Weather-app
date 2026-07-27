@@ -166,7 +166,7 @@ jobs:
       - name: Repair & Generate Android Flutter v2 Embedding Project
         run: |
           echo "Generating clean Android project structure with Flutter v2 embedding..."
-          flutter create --platforms=android --org com.example atmosphere_weather .
+          flutter create --platforms=android --org com.example --project-name atmosphere_weather .
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           echo "Injecting permissions and AdMob metadata into AndroidManifest.xml..."
