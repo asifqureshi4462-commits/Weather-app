@@ -27,16 +27,50 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Generate Missing Android Platform Files
+        run: flutter create --platforms=android .
+
+      - name: Enable Core Library Desugaring
+        run: |
+          if [ -f android/app/build.gradle.kts ]; then
+            FILE=android/app/build.gradle.kts
+            sed -i '/compileOptions {/a\        isCoreLibraryDesugaringEnabled = true' "$FILE"
+            echo '
+          dependencies {
+              coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+          }' >> "$FILE"
+          else
+            FILE=android/app/build.gradle
+            sed -i '/compileOptions {/a\        coreLibraryDesugaringEnabled true' "$FILE"
+            echo '
+          dependencies {
+              coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"
+          }' >> "$FILE"
+          fi
+          echo "----- Patched $FILE -----"
+          cat "$FILE"
+
       - name: Inject .env File from GitHub Secrets
         run: |
           echo "WEATHER_API_KEY=${{ secrets.WEATHER_API_KEY }}" > .env
+          echo "ADMOB_BANNER_UNIT_ID=${{ secrets.ADMOB_BANNER_UNIT_ID }}" >> .env
+          echo "ADMOB_INTERSTITIAL_UNIT_ID=${{ secrets.ADMOB_INTERSTITIAL_UNIT_ID }}" >> .env
           echo "Created .env configuration file."
+
+      - name: Inject AdMob App ID into AndroidManifest
+        run: |
+          sed -i "s/ADMOB_APP_ID_PLACEHOLDER/${{ secrets.ADMOB_APP_ID }}/g" android/app/src/main/AndroidManifest.xml
+          echo "----- Patched AndroidManifest.xml -----"
+          cat android/app/src/main/AndroidManifest.xml
 
       - name: Install Dependencies
         run: flutter pub get
 
       - name: Generate Native Splash Screen
         run: flutter pub run flutter_native_splash:create
+
+      - name: Generate App Launcher Icon
+        run: flutter pub run flutter_launcher_icons
 
       - name: Build Release APK
         run: flutter build apk --release
