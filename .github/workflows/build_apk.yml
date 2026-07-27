@@ -72,14 +72,13 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: DEBUG - Print google_mobile_ads build.gradle content
+      - name: FIX - Patch google_mobile_ads build.gradle syntax bug
         run: |
-          echo "===== Full content of google_mobile_ads android/build.gradle ====="
-          GRADLE_FILE=$(find "$HOME/.pub-cache/hosted/pub.dev" -maxdepth 2 -iname "google_mobile_ads-*" -type d 2>/dev/null | head -1)
-          echo "Found package dir: $GRADLE_FILE"
-          cat -n "$GRADLE_FILE/android/build.gradle" || echo "Could not read file"
-          echo "===== End content ====="
-        continue-on-error: true
+          GRADLE_FILE=$(find "$HOME/.pub-cache/hosted/pub.dev" -maxdepth 2 -iname "google_mobile_ads-*" -type d 2>/dev/null | head -1)/android/build.gradle
+          echo "Patching: $GRADLE_FILE"
+          sed -i "s/for (def configuration : configurations.all) {/configurations.all { configuration ->/" "$GRADLE_FILE"
+          echo "----- Patched section -----"
+          grep -n "configurations.all" "$GRADLE_FILE"
 
       - name: Generate Native Splash Screen
         run: flutter pub run flutter_native_splash:create
