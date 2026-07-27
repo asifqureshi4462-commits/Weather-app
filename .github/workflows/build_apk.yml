@@ -30,6 +30,12 @@ jobs:
       - name: Generate Missing Android Platform Files
         run: flutter create --platforms=android .
 
+      - name: Disable Gradle Configuration Cache (google_mobile_ads compatibility)
+        run: |
+          echo "org.gradle.configuration-cache=false" >> android/gradle.properties
+          echo "----- Patched android/gradle.properties -----"
+          cat android/gradle.properties
+
       - name: Enable Core Library Desugaring
         run: |
           if [ -f android/app/build.gradle.kts ]; then
