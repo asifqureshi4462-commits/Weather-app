@@ -32,12 +32,24 @@ jobs:
 
       - name: Pin Compatible AGP & Gradle Versions (google_mobile_ads compatibility)
         run: |
-          sed -i 's/id "com.android.application" version "[^"]*" apply false/id "com.android.application" version "8.1.1" apply false/' android/settings.gradle
-          sed -i 's#distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.3-all.zip#' android/gradle/wrapper/gradle-wrapper.properties
-          echo "----- Patched android/settings.gradle -----"
-          cat android/settings.gradle
-          echo "----- Patched android/gradle/wrapper/gradle-wrapper.properties -----"
-          cat android/gradle/wrapper/gradle-wrapper.properties
+          if [ -f android/settings.gradle.kts ]; then
+            SFILE=android/settings.gradle.kts
+            sed -i -E 's/id\("com\.android\.application"\) version "[^"]*" apply false/id("com.android.application") version "8.1.1" apply false/' "$SFILE"
+          else
+            SFILE=android/settings.gradle
+            sed -i 's/id "com.android.application" version "[^"]*" apply false/id "com.android.application" version "8.1.1" apply false/' "$SFILE"
+          fi
+          echo "----- Patched $SFILE -----"
+          cat "$SFILE"
+
+          WRAPPER=android/gradle/wrapper/gradle-wrapper.properties
+          if [ -f "$WRAPPER" ]; then
+            sed -i 's#distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.3-all.zip#' "$WRAPPER"
+            echo "----- Patched $WRAPPER -----"
+            cat "$WRAPPER"
+          else
+            echo "WARNING: $WRAPPER not found yet, skipping wrapper pin"
+          fi
 
       - name: Enable Core Library Desugaring
         run: |
