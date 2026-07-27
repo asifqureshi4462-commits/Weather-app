@@ -40,10 +40,10 @@ class WeatherProvider with ChangeNotifier {
     _isMetric = prefs.getBool('is_metric') ?? true;
     _selectedLanguage = prefs.getString('language') ?? 'English';
 
-    // 1. Instantly attempt to load cached weather from disk storage (Offline First)
+    // Load from local persistent cache first
     await _loadFromPersistentCache(_currentCity);
 
-    // 2. Fetch fresh weather data from WeatherAPI
+    // Fetch fresh weather data from API
     await fetchWeather(_currentCity);
   }
 
@@ -79,20 +79,16 @@ class WeatherProvider with ChangeNotifier {
       _isOffline = false;
       _lastFetchTime = DateTime.now();
 
-      // Persist latest weather JSON to local disk storage
       await _saveToPersistentCache(_currentCity, rawJsonMap);
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_lastCityKey, _currentCity);
       await prefs.setString(_lastFetchTimeKey, _lastFetchTime!.toIso8601String());
 
-      // Sync Android Home Widget
       WidgetService.updateHomeWidget(_weatherData!, isMetric: _isMetric);
-
-      // Generate AI Vibe summary
       _generateAiVibe();
     } catch (e) {
-      debugPrint('Network error or offline: $e. Falling back to persistent disk cache...');
+      debugPrint('Network error: $e. Loading from cache...');
       final cacheLoaded = await _loadFromPersistentCache(cityName);
       if (cacheLoaded) {
         _isOffline = true;
@@ -114,7 +110,6 @@ class WeatherProvider with ChangeNotifier {
       final jsonString = jsonEncode(jsonMap);
       await prefs.setString(cacheKey, jsonString);
       await prefs.setString('last_cached_weather_json', jsonString);
-      debugPrint('Successfully saved weather data to persistent cache for $city');
     } catch (e) {
       debugPrint('Failed to write weather cache: $e');
     }
@@ -124,10 +119,7 @@ class WeatherProvider with ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final cacheKey = '$_cachedWeatherKeyPrefix${city.toLowerCase().trim()}';
-      String? cachedJson = prefs.getString(cacheKey);
-
-      // Fallback to most recent cached weather if specific city isn't found
-      cachedJson ??= prefs.getString('last_cached_weather_json');
+      String? cachedJson = prefs.getString(cacheKey) ?? prefs.getString('last_cached_weather_json');
 
       if (cachedJson != null && cachedJson.isNotEmpty) {
         final decodedMap = jsonDecode(cachedJson) as Map<String, dynamic>;
