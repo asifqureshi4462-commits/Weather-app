@@ -200,23 +200,8 @@ jobs:
           MAIN_JAVA_DIR="android/app/src/main/java/com/example/atmosphere_weather"
           mkdir -p "$MAIN_KT_DIR" "$MAIN_JAVA_DIR"
 
-          cat << 'EOF' > "$MAIN_KT_DIR/MainActivity.kt"
-package com.example.atmosphere_weather
-
-import io.flutter.embedding.android.FlutterActivity
-
-class MainActivity: FlutterActivity() {
-}
-EOF
-
-          cat << 'EOF' > "$MAIN_JAVA_DIR/MainActivity.kt"
-package com.example.atmosphere_weather
-
-import io.flutter.embedding.android.FlutterActivity
-
-class MainActivity: FlutterActivity() {
-}
-EOF
+          printf 'package com.example.atmosphere_weather\n\nimport io.flutter.embedding.android.FlutterActivity\n\nclass MainActivity: FlutterActivity() {\n}\n' > "$MAIN_KT_DIR/MainActivity.kt"
+          cp "$MAIN_KT_DIR/MainActivity.kt" "$MAIN_JAVA_DIR/MainActivity.kt"
           echo "Flutter v2 embedding MainActivity.kt generated successfully."
 
       - name: Build Release APK
