@@ -158,14 +158,38 @@ jobs:
           echo "ADMOB_INTERSTITIAL_UNIT_ID=\${{ secrets.ADMOB_INTERSTITIAL_UNIT_ID }}" >> .env
           echo "Created .env configuration with GitHub Secrets."
 
-      - name: Inject AdMob App ID into AndroidManifest.xml
+      - name: Repair & Generate Android Flutter v2 Embedding Project
         run: |
+          echo "Generating clean Android project structure with Flutter v2 embedding..."
+          flutter create --platforms=android --org com.example atmosphere_weather .
+
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          echo "Injecting permissions and AdMob metadata into AndroidManifest.xml..."
+
+          if ! grep -q "android.permission.INTERNET" "$MANIFEST"; then
+            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' "$MANIFEST"
+          fi
+
+          if ! grep -q "flutterEmbedding" "$MANIFEST"; then
+            sed -i 's|</application>|        <meta-data android:name="flutterEmbedding" android:value="2" />\n    </application>|' "$MANIFEST"
+          fi
+
           ADMOB_ID="\${{ secrets.ADMOB_APP_ID }}"
           if [ -z "\$ADMOB_ID" ]; then
             ADMOB_ID="ca-app-pub-3940256099942544~3347511713"
           fi
-          sed -i "s/ADMOB_APP_ID_PLACEHOLDER/\$ADMOB_ID/g" android/app/src/main/AndroidManifest.xml || true
-          echo "Successfully injected AdMob App ID into AndroidManifest.xml"
+          if ! grep -q "com.google.android.gms.ads.APPLICATION_ID" "$MANIFEST"; then
+            sed -i "s|</application>|        <meta-data android:name=\"com.google.android.gms.ads.APPLICATION_ID\" android:value=\"\$ADMOB_ID\" />\n    </application>|" "$MANIFEST"
+          else
+            sed -i "s/ADMOB_APP_ID_PLACEHOLDER/\$ADMOB_ID/g" "$MANIFEST" || true
+          fi
+
+          MAIN_KT_DIR="android/app/src/main/kotlin/com/example/atmosphere_weather"
+          mkdir -p "$MAIN_KT_DIR"
+          printf 'package com.example.atmosphere_weather\n\nimport io.flutter.embedding.android.FlutterActivity\n\nclass MainActivity: FlutterActivity() {\n}\n' > "$MAIN_KT_DIR/MainActivity.kt"
+          find android/ -name "MainActivity.java" -delete 2>/dev/null || true
+
+          echo "Flutter Android v2 embedding setup generated."
 
       - name: Install Dependencies
         run: flutter pub get
@@ -184,23 +208,6 @@ jobs:
           else
             echo "No google_mobile_ads gradle file required patching."
           fi
-
-      - name: Ensure Flutter v2 Embedding (MainActivity & AndroidManifest)
-        run: |
-          echo "Cleaning up any legacy v1 files across android directory..."
-          find android/ -name "MainActivity.java" -delete 2>/dev/null || true
-
-          MAIN_KT_DIR="android/app/src/main/kotlin/com/example/atmosphere_weather"
-          mkdir -p "$MAIN_KT_DIR"
-          printf 'package com.example.atmosphere_weather\n\nimport io.flutter.embedding.android.FlutterActivity\n\nclass MainActivity: FlutterActivity() {\n}\n' > "$MAIN_KT_DIR/MainActivity.kt"
-
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            echo "Verifying Flutter v2 embedding tag in AndroidManifest.xml..."
-            sed -i '/flutterEmbedding/d' "$MANIFEST" || true
-            sed -i 's|</application>|        <meta-data android:name="flutterEmbedding" android:value="2" />\n    </application>|' "$MANIFEST"
-          fi
-          echo "Flutter v2 embedding successfully configured."
 
       - name: Build Release APK
         run: flutter build apk --release
@@ -239,17 +246,9 @@ jobs:
         android:name="\${applicationName}"
         android:icon="@mipmap/ic_launcher">
         
-        <!-- Flutter v2 Embedding Requirement (Must be direct child of <application>) -->
-        <meta-data
-            android:name="flutterEmbedding"
-            android:value="2" />
+        <meta-data android:name="flutterEmbedding" android:value="2" />
+        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ADMOB_APP_ID_PLACEHOLDER" />
 
-        <!-- Google AdMob Application ID Metadata Placeholder (Replaced by GitHub Actions sed) -->
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ADMOB_APP_ID_PLACEHOLDER"/>
-
-        <!-- Home Screen AppWidget Receiver -->
         <receiver
             android:name=".WeatherWidgetProvider"
             android:exported="true">
@@ -270,9 +269,7 @@ jobs:
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
 
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
+            <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
