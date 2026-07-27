@@ -30,6 +30,12 @@ jobs:
       - name: Generate Missing Android Platform Files
         run: flutter create --platforms=android .
 
+      - name: Opt Out of AGP New DSL (google_mobile_ads compatibility)
+        run: |
+          echo "android.newDsl=false" >> android/gradle.properties
+          echo "----- Patched android/gradle.properties -----"
+          cat android/gradle.properties
+
       - name: Enable Core Library Desugaring
         run: |
           if [ -f android/app/build.gradle.kts ]; then
