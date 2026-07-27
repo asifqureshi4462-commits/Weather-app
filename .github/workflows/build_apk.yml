@@ -36,6 +36,20 @@ jobs:
           echo "----- Patched android/gradle.properties -----"
           cat android/gradle.properties
 
+      - name: Bump compileSdk to 36 (webview_flutter_android compatibility)
+        run: |
+          if [ -f android/app/build.gradle.kts ]; then
+            FILE=android/app/build.gradle.kts
+            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 36/' "$FILE"
+            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdk = 36/' "$FILE"
+          else
+            FILE=android/app/build.gradle
+            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 36/' "$FILE"
+            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 36/' "$FILE"
+          fi
+          echo "----- Patched $FILE -----"
+          grep -n "compileSdk" "$FILE"
+
       - name: Enable Core Library Desugaring
         run: |
           if [ -f android/app/build.gradle.kts ]; then
