@@ -89,6 +89,11 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_native_splash: ^2.4.0
+
+flutter_native_splash:
+  color: "#0F2027"
+  color_dark: "#0F2027"
 
 flutter:
   uses-material-design: true
@@ -193,6 +198,9 @@ jobs:
 
       - name: Install Dependencies
         run: flutter pub get
+
+      - name: Generate Native Splash Screen
+        run: flutter pub run flutter_native_splash:create || true
 
       - name: FIX - Patch google_mobile_ads build.gradle for Gradle Compatibility
         run: |
