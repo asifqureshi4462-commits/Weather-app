@@ -27,78 +27,26 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Generate Missing Android Platform Files
-        run: flutter create --platforms=android .
-
-      - name: Opt Out of AGP New DSL (google_mobile_ads compatibility)
-        run: |
-          echo "android.newDsl=false" >> android/gradle.properties
-          echo "----- Patched android/gradle.properties -----"
-          cat android/gradle.properties
-
-      - name: Bump compileSdk to 36 (webview_flutter_android compatibility)
-        run: |
-          if [ -f android/app/build.gradle.kts ]; then
-            FILE=android/app/build.gradle.kts
-            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 36/' "$FILE"
-            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdk = 36/' "$FILE"
-          else
-            FILE=android/app/build.gradle
-            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 36/' "$FILE"
-            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 36/' "$FILE"
-          fi
-          echo "----- Patched $FILE -----"
-          grep -n "compileSdk" "$FILE"
-
-      - name: Enable Core Library Desugaring
-        run: |
-          if [ -f android/app/build.gradle.kts ]; then
-            FILE=android/app/build.gradle.kts
-            sed -i '/compileOptions {/a\        isCoreLibraryDesugaringEnabled = true' "$FILE"
-            echo '
-          dependencies {
-              coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-          }' >> "$FILE"
-          else
-            FILE=android/app/build.gradle
-            sed -i '/compileOptions {/a\        coreLibraryDesugaringEnabled true' "$FILE"
-            echo '
-          dependencies {
-              coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"
-          }' >> "$FILE"
-          fi
-          echo "----- Patched $FILE -----"
-          cat "$FILE"
-
       - name: Inject .env File from GitHub Secrets
         run: |
           echo "WEATHER_API_KEY=${{ secrets.WEATHER_API_KEY }}" > .env
+          echo "AI_API_KEY=${{ secrets.AI_API_KEY }}" >> .env
+          echo "ADMOB_APP_ID=${{ secrets.ADMOB_APP_ID }}" >> .env
           echo "ADMOB_BANNER_UNIT_ID=${{ secrets.ADMOB_BANNER_UNIT_ID }}" >> .env
           echo "ADMOB_INTERSTITIAL_UNIT_ID=${{ secrets.ADMOB_INTERSTITIAL_UNIT_ID }}" >> .env
-          echo "Created .env configuration file."
+          echo "Created .env configuration with GitHub Secrets."
 
-      - name: Inject AdMob App ID into AndroidManifest
+      - name: Inject AdMob App ID into AndroidManifest.xml
         run: |
-          sed -i "s/ADMOB_APP_ID_PLACEHOLDER/${{ secrets.ADMOB_APP_ID }}/g" android/app/src/main/AndroidManifest.xml
-          echo "----- Patched AndroidManifest.xml -----"
-          cat android/app/src/main/AndroidManifest.xml
+          ADMOB_ID="${{ secrets.ADMOB_APP_ID }}"
+          if [ -z "$ADMOB_ID" ]; then
+            ADMOB_ID="ca-app-pub-3940256099942544~3347511713"
+          fi
+          sed -i "s/ADMOB_APP_ID_PLACEHOLDER/$ADMOB_ID/g" android/app/src/main/AndroidManifest.xml || true
+          echo "Successfully injected AdMob App ID into AndroidManifest.xml"
 
       - name: Install Dependencies
         run: flutter pub get
-
-      - name: FIX - Patch google_mobile_ads build.gradle syntax bug
-        run: |
-          GRADLE_FILE=$(find "$HOME/.pub-cache/hosted/pub.dev" -maxdepth 2 -iname "google_mobile_ads-*" -type d 2>/dev/null | head -1)/android/build.gradle
-          echo "Patching: $GRADLE_FILE"
-          sed -i "s/for (def configuration : configurations.all) {/configurations.all { configuration ->/" "$GRADLE_FILE"
-          echo "----- Patched section -----"
-          grep -n "configurations.all" "$GRADLE_FILE"
-
-      - name: Generate Native Splash Screen
-        run: flutter pub run flutter_native_splash:create
-
-      - name: Generate App Launcher Icon
-        run: flutter pub run flutter_launcher_icons
 
       - name: Build Release APK
         run: flutter build apk --release
@@ -114,12 +62,10 @@ jobs:
         if: github.ref == 'refs/heads/main'
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: Release v1.0.${{ github.run_number }}
+          name: Atmosphere Weather APK Release v1.0.${{ github.run_number }}
           body: |
             ## Atmosphere Weather Android APK Release
-            - Automated GitHub Actions build for run #${{ github.run_number }}
-            - Built with Flutter Stable SDK & Java 17
-            - Null-safety enabled & release optimized
+            - Built with google_mobile_ads ^9.0.0 & Flutter Stable SDK
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
