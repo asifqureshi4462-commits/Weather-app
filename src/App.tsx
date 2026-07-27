@@ -183,15 +183,41 @@ jobs:
             echo "No google_mobile_ads gradle file required patching."
           fi
 
-      - name: Ensure Flutter v2 Embedding in AndroidManifest.xml
+      - name: Ensure Flutter v2 Embedding (MainActivity & AndroidManifest)
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
-            if ! grep -q "flutterEmbedding" "$MANIFEST"; then
-              echo "Injecting Android v2 embedding metadata into AndroidManifest.xml..."
-              sed -i '/<activity/a \            <meta-data android:name="flutterEmbedding" android:value="2" \/>' "$MANIFEST"
-            fi
+            echo "Enforcing Flutter v2 embedding placement in AndroidManifest.xml..."
+            sed -i '/flutterEmbedding/d' "$MANIFEST" || true
+            sed -i '/<application/a \        <meta-data android:name="flutterEmbedding" android:value="2" \/>' "$MANIFEST"
+            echo "Flutter v2 embedding tag successfully set inside <application> tag."
           fi
+
+          echo "Deleting legacy v1 MainActivity.java if present..."
+          find android/app/src/main -name "MainActivity.java" -delete 2>/dev/null || true
+
+          MAIN_KT_DIR="android/app/src/main/kotlin/com/example/atmosphere_weather"
+          MAIN_JAVA_DIR="android/app/src/main/java/com/example/atmosphere_weather"
+          mkdir -p "$MAIN_KT_DIR" "$MAIN_JAVA_DIR"
+
+          cat << 'EOF' > "$MAIN_KT_DIR/MainActivity.kt"
+package com.example.atmosphere_weather
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity: FlutterActivity() {
+}
+EOF
+
+          cat << 'EOF' > "$MAIN_JAVA_DIR/MainActivity.kt"
+package com.example.atmosphere_weather
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity: FlutterActivity() {
+}
+EOF
+          echo "Flutter v2 embedding MainActivity.kt generated successfully."
 
       - name: Build Release APK
         run: flutter build apk --release
@@ -230,6 +256,11 @@ jobs:
         android:name="\${applicationName}"
         android:icon="@mipmap/ic_launcher">
         
+        <!-- Flutter v2 Embedding Requirement (Must be direct child of <application>) -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+
         <!-- Google AdMob Application ID Metadata Placeholder (Replaced by GitHub Actions sed) -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
@@ -255,11 +286,10 @@ jobs:
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
-            
-            <!-- Flutter v2 Embedding requirement -->
+
             <meta-data
-                android:name="flutterEmbedding"
-                android:value="2" />
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
