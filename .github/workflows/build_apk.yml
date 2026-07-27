@@ -30,11 +30,14 @@ jobs:
       - name: Generate Missing Android Platform Files
         run: flutter create --platforms=android .
 
-      - name: Disable Gradle Configuration Cache (google_mobile_ads compatibility)
+      - name: Pin Compatible AGP & Gradle Versions (google_mobile_ads compatibility)
         run: |
-          echo "org.gradle.configuration-cache=false" >> android/gradle.properties
-          echo "----- Patched android/gradle.properties -----"
-          cat android/gradle.properties
+          sed -i 's/id "com.android.application" version "[^"]*" apply false/id "com.android.application" version "8.1.1" apply false/' android/settings.gradle
+          sed -i 's#distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.3-all.zip#' android/gradle/wrapper/gradle-wrapper.properties
+          echo "----- Patched android/settings.gradle -----"
+          cat android/settings.gradle
+          echo "----- Patched android/gradle/wrapper/gradle-wrapper.properties -----"
+          cat android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Enable Core Library Desugaring
         run: |
