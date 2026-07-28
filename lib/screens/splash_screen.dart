@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/weather_provider.dart';
-import '../services/ad_service.dart';
+import '../services/ad_service.dart' as ads;
 import 'home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -42,7 +42,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     if (!mounted) return;
 
-    AdService.showInterstitialIfReady(
+    ads.AdService.showInterstitialIfReady(
       onDismissed: () {
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
