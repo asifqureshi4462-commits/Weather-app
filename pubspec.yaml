@@ -21,6 +21,7 @@ dependencies:
   fl_chart: ^0.68.0
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
+  google_mobile_ads: ">=5.1.0 <7.0.0"
 
 dev_dependencies:
   flutter_test:
