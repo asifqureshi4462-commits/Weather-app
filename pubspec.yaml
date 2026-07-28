@@ -1,0 +1,54 @@
+name: atmosphere_weather
+description: "A feature-rich Flutter Weather application with GitHub Actions CI/CD pipeline for automated APK builds."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.1
+  provider: ^6.1.2
+  shared_preferences: ^2.2.3
+  geolocator: ^11.0.0
+  permission_handler: ^11.3.1
+  flutter_dotenv: ^5.1.0
+  intl: ^0.19.0
+  flutter_local_notifications: ^17.1.2
+  timezone: ^0.9.2
+  fl_chart: ^0.68.0
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  flutter_native_splash: ^2.4.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/app_logo.png"
+  min_sdk_android: 21
+
+flutter_native_splash:
+  color: "#0F2027"
+  color_dark: "#0F2027"
+  image: "assets/splash_icon.png"
+  image_dark: "assets/splash_icon.png"
+  android_12:
+    image: "assets/splash_icon.png"
+    icon_background_color: "#0F2027"
+    image_dark: "assets/splash_icon.png"
+    icon_background_color_dark: "#0F2027"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
+    - assets/app_logo.png
+    - assets/splash_icon.png
