@@ -4,6 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'providers/weather_provider.dart';
 import 'screens/splash_screen.dart';
+import 'services/ad_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +23,9 @@ Future<void> main() async {
   } catch (_) {
     debugPrint('No .env file found or failed to parse. Relying on default settings.');
   }
+
+  // Initialize AdMob (banner unit ID is read from .env by AdService).
+  await AdService.initialize();
 
   runApp(
     ChangeNotifierProvider(
