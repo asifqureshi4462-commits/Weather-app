@@ -100,6 +100,9 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
+      - name: Generate App Launcher Icons
+        run: flutter pub run flutter_launcher_icons
+
       - name: Generate Native Splash Screen
         run: flutter pub run flutter_native_splash:create || true
 
