@@ -2605,21 +2605,60 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
                       </div>
                     </div>
 
-                    {/* Atmospheric Details Grid */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="p-2.5 rounded-xl bg-black/20 border border-white/10 flex flex-col justify-between">
+                    {/* Atmospheric Details Grid with Staggered Entrance Animation */}
+                    <motion.div
+                      key={`metrics-grid-${selectedCity}`}
+                      initial="hidden"
+                      animate="show"
+                      variants={{
+                        hidden: { opacity: 0 },
+                        show: {
+                          opacity: 1,
+                          transition: {
+                            staggerChildren: 0.08,
+                            delayChildren: 0.05,
+                          },
+                        },
+                      }}
+                      className="grid grid-cols-2 gap-2"
+                    >
+                      {/* 1. HUMIDITY */}
+                      <motion.div
+                        variants={{
+                          hidden: { opacity: 0, y: 15, scale: 0.95 },
+                          show: {
+                            opacity: 1,
+                            y: 0,
+                            scale: 1,
+                            transition: { type: 'spring', stiffness: 320, damping: 22 },
+                          },
+                        }}
+                        className="p-2.5 rounded-xl bg-black/20 border border-white/10 flex flex-col justify-between hover:bg-black/30 transition-colors shadow-sm"
+                      >
                         <div className="flex items-center gap-1.5 text-slate-300">
                           <Droplets className="w-3.5 h-3.5 text-cyan-400" />
-                          <span className="text-[10px] font-bold">HUMIDITY</span>
+                          <span className="text-[10px] font-bold tracking-wider">HUMIDITY</span>
                         </div>
                         <span className="text-base font-bold my-1">{currentWeather.humidity}%</span>
                         <span className="text-[9px] text-slate-400">Dew point comfortable</span>
-                      </div>
+                      </motion.div>
 
-                      <div className="p-2.5 rounded-xl bg-black/20 border border-white/10 flex flex-col justify-between">
+                      {/* 2. WIND */}
+                      <motion.div
+                        variants={{
+                          hidden: { opacity: 0, y: 15, scale: 0.95 },
+                          show: {
+                            opacity: 1,
+                            y: 0,
+                            scale: 1,
+                            transition: { type: 'spring', stiffness: 320, damping: 22 },
+                          },
+                        }}
+                        className="p-2.5 rounded-xl bg-black/20 border border-white/10 flex flex-col justify-between hover:bg-black/30 transition-colors shadow-sm"
+                      >
                         <div className="flex items-center gap-1.5 text-slate-300">
                           <Wind className="w-3.5 h-3.5 text-cyan-400" />
-                          <span className="text-[10px] font-bold">WIND</span>
+                          <span className="text-[10px] font-bold tracking-wider">WIND</span>
                         </div>
                         <span className="text-base font-bold my-1">
                           {isMetric ? `${currentWeather.windKph} km/h` : `${currentWeather.windMph} mph`}
@@ -2634,26 +2673,58 @@ Check .github/workflows/build_apk.yml for the Android build pipeline.`
                           <span className="font-semibold text-cyan-200">{currentWeather.windDir}</span>
                           <span className="text-[8px] text-slate-400 font-mono">({getWindDegrees(currentWeather.windDir)}°)</span>
                         </div>
-                      </div>
+                      </motion.div>
 
-                      <div className="p-2.5 rounded-xl bg-black/20 border border-white/10 flex flex-col justify-between">
+                      {/* 3. UV INDEX */}
+                      <motion.div
+                        variants={{
+                          hidden: { opacity: 0, y: 15, scale: 0.95 },
+                          show: {
+                            opacity: 1,
+                            y: 0,
+                            scale: 1,
+                            transition: { type: 'spring', stiffness: 320, damping: 22 },
+                          },
+                        }}
+                        className="p-2.5 rounded-xl bg-black/20 border border-white/10 flex flex-col justify-between hover:bg-black/30 transition-colors shadow-sm"
+                      >
                         <div className="flex items-center gap-1.5 text-slate-300">
                           <Sun className="w-3.5 h-3.5 text-amber-400" />
-                          <span className="text-[10px] font-bold">UV INDEX</span>
+                          <span className="text-[10px] font-bold tracking-wider">UV INDEX</span>
                         </div>
                         <span className="text-base font-bold my-1">{currentWeather.uvIndex}</span>
-                        <span className="text-[9px] text-slate-400">Moderate level</span>
-                      </div>
+                        <span className="text-[9px] text-slate-400">
+                          {currentWeather.uvIndex <= 2
+                            ? 'Low'
+                            : currentWeather.uvIndex <= 5
+                            ? 'Moderate level'
+                            : currentWeather.uvIndex <= 7
+                            ? 'High - Wear sunscreen'
+                            : 'Very High'}
+                        </span>
+                      </motion.div>
 
-                      <div className="p-2.5 rounded-xl bg-black/20 border border-white/10 flex flex-col justify-between">
+                      {/* 4. AIR QUALITY (AQI) */}
+                      <motion.div
+                        variants={{
+                          hidden: { opacity: 0, y: 15, scale: 0.95 },
+                          show: {
+                            opacity: 1,
+                            y: 0,
+                            scale: 1,
+                            transition: { type: 'spring', stiffness: 320, damping: 22 },
+                          },
+                        }}
+                        className="p-2.5 rounded-xl bg-black/20 border border-white/10 flex flex-col justify-between hover:bg-black/30 transition-colors shadow-sm"
+                      >
                         <div className="flex items-center gap-1.5 text-slate-300">
                           <Gauge className="w-3.5 h-3.5 text-cyan-400" />
-                          <span className="text-[10px] font-bold">AIR QUALITY</span>
+                          <span className="text-[10px] font-bold tracking-wider">AIR QUALITY</span>
                         </div>
                         <span className="text-base font-bold my-1">AQI {currentWeather.aqiEpa}</span>
                         <span className="text-[9px] text-slate-400">PM2.5: {currentWeather.aqiPm25}</span>
-                      </div>
-                    </div>
+                      </motion.div>
+                    </motion.div>
 
                     {/* Sun Phase Card */}
                     <div className="p-3 rounded-xl bg-black/20 border border-white/10 space-y-2.5">

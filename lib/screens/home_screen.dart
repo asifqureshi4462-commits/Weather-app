@@ -8,8 +8,6 @@ import '../widgets/hourly_forecast_list.dart';
 import '../widgets/daily_forecast_list.dart';
 import '../widgets/weather_details_grid.dart';
 import '../widgets/weather_trend_chart.dart';
-import '../widgets/banner_ad_widget.dart';
-import '../services/ad_service.dart';
 import 'search_screen.dart';
 import 'favorites_screen.dart';
 import 'settings_screen.dart';
@@ -24,16 +22,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   ChartType _selectedChartType = ChartType.temperature;
-
-  @override
-  void initState() {
-    super.initState();
-    // Show the app-open interstitial (if it finished preloading) right after
-    // the Home screen's first frame is drawn.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      AdService.showInterstitialIfReady();
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -137,7 +125,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: const BannerAdWidget(),
     );
   }
 

@@ -133,55 +133,70 @@ class WeatherDetailsGrid extends StatelessWidget {
             ),
             itemBuilder: (context, index) {
               final item = items[index];
-              return Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(item.icon, size: 18, color: Colors.white70),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            item.title,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white70,
+              return TweenAnimationBuilder<double>(
+                key: ValueKey('${weather.locationName}_${weather.current.tempC}_$index'),
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                duration: Duration(milliseconds: 300 + (index * 70)),
+                curve: Curves.easeOutCubic,
+                builder: (context, value, child) {
+                  return Opacity(
+                    opacity: value,
+                    child: Transform.translate(
+                      offset: Offset(0, (1 - value) * 16),
+                      child: child,
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(item.icon, size: 18, color: Colors.white70),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              item.title,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white70,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
+                        ],
+                      ),
+                      Text(
+                        item.value,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
-                      ],
-                    ),
-                    Text(
-                      item.value,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      item.subtitle,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.white.withValues(alpha: 0.75),
+                      Text(
+                        item.subtitle,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white.withValues(alpha: 0.75),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             },

@@ -41,22 +41,6 @@ jobs:
           echo "Generating clean Android project structure with Flutter v2 embedding..."
           flutter create --platforms=android --org com.example --project-name atmosphere_weather .
 
-          # -----------------------------------------------------------------
-          # Force AGP's legacy DSL / legacy Kotlin plugin compatibility mode.
-          # AGP 9.0+ introduced a new DSL that many third-party plugins
-          # (including google_mobile_ads) have not yet migrated to, causing
-          # errors like "Could not get unknown property 'all' for
-          # configuration container ... of type DefaultConfigurationContainer".
-          # This is Flutter's own documented mitigation:
-          # https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers
-          # -----------------------------------------------------------------
-          GRADLE_PROPS="android/gradle.properties"
-          if [ -f "$GRADLE_PROPS" ]; then
-            grep -q "android.newDsl" "$GRADLE_PROPS" || echo "android.newDsl=false" >> "$GRADLE_PROPS"
-            grep -q "android.builtInKotlin" "$GRADLE_PROPS" || echo "android.builtInKotlin=false" >> "$GRADLE_PROPS"
-            echo "Forced legacy AGP DSL compatibility mode in $GRADLE_PROPS."
-          fi
-
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           echo "Injecting permissions and AdMob metadata into AndroidManifest.xml..."
 
@@ -116,9 +100,6 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Generate App Launcher Icons
-        run: flutter pub run flutter_launcher_icons
-
       - name: Generate Native Splash Screen
         run: flutter pub run flutter_native_splash:create || true
 
@@ -130,11 +111,7 @@ jobs:
             for FILE in $GRADLE_FILES; do
               echo "Processing $FILE..."
               sed -i 's/for\s*(configuration\s*in\s*configurations)/for (configuration in configurations.matching { it.name != "archives" })/g' "$FILE" 2>/dev/null || true
-              # Handle "configurations.all { ... }" (same line)
-              sed -i 's/configurations\.all\s*{/configurations.configureEach {/g' "$FILE" 2>/dev/null || true
-              # Handle "configurations.all" possibly split across a line break
-              # before the opening brace (perl -0777 = treat whole file as one string).
-              perl -0777 -pi -e 's/configurations\.all(\s*)\{/configurations.configureEach$1\{/g' "$FILE" 2>/dev/null || true
+              sed -i 's/configurations\.all\s*\{/configurations.configureEach {/g' "$FILE" 2>/dev/null || true
               echo "Safely processed $FILE"
             done
           else
