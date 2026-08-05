@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import '../models/weather_model.dart';
 
@@ -134,7 +135,7 @@ class WeatherDetailsGrid extends StatelessWidget {
             itemBuilder: (context, index) {
               final item = items[index];
               return TweenAnimationBuilder<double>(
-                key: ValueKey('${weather.locationName}_${weather.current.tempC}_$index'),
+                key: ValueKey('${weather.location.name}_${weather.current.tempC}_$index'),
                 tween: Tween<double>(begin: 0.0, end: 1.0),
                 duration: Duration(milliseconds: 300 + (index * 70)),
                 curve: Curves.easeOutCubic,
