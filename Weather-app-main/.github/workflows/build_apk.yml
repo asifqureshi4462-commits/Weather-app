@@ -1,0 +1,123 @@
+name: Build & Release Flutter Android APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Inject .env File from GitHub Secrets
+        run: |
+          echo "WEATHER_API_KEY=${{ secrets.WEATHER_API_KEY }}" > .env
+          echo "Created .env configuration with GitHub Secrets."
+
+      - name: Save project files that must survive flutter create
+        run: |
+          mkdir -p /tmp/keep
+          cp android/app/src/main/AndroidManifest.xml /tmp/keep/AndroidManifest.xml
+          mkdir -p /tmp/keep/drawable
+          if [ -d android/app/src/main/res/drawable ]; then
+            cp -r android/app/src/main/res/drawable/. /tmp/keep/drawable/
+          fi
+
+      - name: Repair & Generate Android Flutter v2 Embedding Project
+        run: |
+          echo "Generating clean Android project structure with Flutter v2 embedding..."
+          flutter create --platforms=android --org com.example --project-name atmosphere_weather .
+
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+
+          echo "Restoring our AndroidManifest.xml (GPS + notification permissions)..."
+          cp /tmp/keep/AndroidManifest.xml "$MANIFEST"
+
+          echo "Restoring notification icon drawable..."
+          mkdir -p android/app/src/main/res/drawable
+          cp -r /tmp/keep/drawable/. android/app/src/main/res/drawable/ || true
+
+          MAIN_KT_DIR="android/app/src/main/kotlin/com/example/atmosphere_weather"
+          mkdir -p "$MAIN_KT_DIR"
+          printf 'package com.example.atmosphere_weather\n\nimport io.flutter.embedding.android.FlutterActivity\n\nclass MainActivity: FlutterActivity() {\n}\n' > "$MAIN_KT_DIR/MainActivity.kt"
+          find android/ -name "MainActivity.java" -delete 2>/dev/null || true
+
+          if [ -f "android/app/build.gradle" ]; then
+            echo "Enabling core library desugaring in android/app/build.gradle..."
+            if ! grep -q "coreLibraryDesugaringEnabled" android/app/build.gradle; then
+              sed -i 's/compileOptions {/compileOptions {\n        coreLibraryDesugaringEnabled true/' android/app/build.gradle
+            fi
+            if ! grep -q "desugar_jdk_libs" android/app/build.gradle; then
+              if grep -q "dependencies {" android/app/build.gradle; then
+                sed -i 's/dependencies {/dependencies {\n    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"/' android/app/build.gradle
+              else
+                printf '\ndependencies {\n    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"\n}\n' >> android/app/build.gradle
+              fi
+            fi
+          fi
+
+          if [ -f "android/app/build.gradle.kts" ]; then
+            echo "Enabling core library desugaring in android/app/build.gradle.kts..."
+            if ! grep -q "isCoreLibraryDesugaringEnabled" android/app/build.gradle.kts; then
+              sed -i 's/compileOptions {/compileOptions {\n        isCoreLibraryDesugaringEnabled = true/' android/app/build.gradle.kts
+            fi
+            if ! grep -q "desugar_jdk_libs" android/app/build.gradle.kts; then
+              if grep -q "dependencies {" android/app/build.gradle.kts; then
+                sed -i 's/dependencies {/dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")/' android/app/build.gradle.kts
+              else
+                printf '\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")\n}\n' >> android/app/build.gradle.kts
+              fi
+            fi
+          fi
+
+          echo "Flutter Android v2 embedding & desugaring setup generated."
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Generate App Launcher Icon (assets/app_icon.png)
+        run: dart run flutter_launcher_icons
+
+      - name: Generate Native Splash Screen
+        run: dart run flutter_native_splash:create || true
+
+      - name: Build Release APK
+        run: flutter build apk --release
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Atmosphere-Weather-v1.1.${{ github.run_number }}.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          tag_name: v1.1.${{ github.run_number }}
+          name: Release v1.1.${{ github.run_number }}
+          body: |
+            ## Atmosphere Weather Android APK Release
+            - Automated GitHub Actions build for run #${{ github.run_number }}
+            - Features: Auto GPS refresh, GPS & notification permission prompts, Smart weather alerts, Live radar with fixed zoom, Daily summary notification
+          files: build/app/outputs/flutter-apk/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

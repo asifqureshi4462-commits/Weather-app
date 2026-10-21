@@ -1,0 +1,6 @@
+{
+  "name": "Flutter Weather App & Repository",
+  "description": "Production-ready Flutter Weather Application with complete GitHub Actions CI/CD pipeline for automated APK builds.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
